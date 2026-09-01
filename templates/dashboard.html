@@ -1,0 +1,2801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ILECO-1 Outage Management Dashboard</title>
+
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
+
+    <style>
+    /* ─── RESET ─────────────────────────────────────── */
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        color: #fff;
+        min-height: 100vh;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       SHARED HEADER
+    ═══════════════════════════════════════════════════ */
+    .ileco-header {
+        background: #0f1c3f;
+        min-height: 68px;
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        padding: 0 28px;
+        position: sticky;
+        top: 0;
+        z-index: 1200;
+        box-shadow: 0 3px 24px rgba(0,0,0,.45);
+        border-bottom: 2px solid rgba(245,166,35,.25);
+        gap: 0;
+        width: 100%;
+    }
+    .ileco-brand {
+        display: flex; align-items: center; gap: 10px;
+        font-weight: 900; font-size: 17px; letter-spacing: .4px;
+        color: #fff; text-decoration: none;
+        margin-right: 24px; flex-shrink: 0; white-space: nowrap;
+    }
+    .ileco-brand .bolt { font-size: 24px; filter: drop-shadow(0 0 8px rgba(251,191,36,.7)); }
+    .ileco-brand .accent { color: #f5a623; }
+
+    .ileco-header {
+        background: #0f1c3f;
+        min-height: 68px;
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        padding: 0 28px;
+        position: sticky;
+        top: 0;
+        z-index: 1200;
+        box-shadow: 0 3px 24px rgba(0,0,0,.45);
+        border-bottom: 2px solid rgba(245,166,35,.25);
+        gap: 0;
+        width: 100%;
+    }
+    .ileco-nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: visible;
+    scrollbar-width: none;
+    padding: 4px 0;
+}
+.ileco-nav::-webkit-scrollbar { display: none; }
+.ileco-nav-tab {
+    display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0;
+    padding: 10px 20px;
+    border-radius: 10px; border: none;
+    background: transparent;
+    color: rgba(255,255,255,.6);
+    font-size: 14px; font-weight: 700; font-family: inherit;
+    cursor: pointer; transition: all .2s;
+    position: relative; text-decoration: none; white-space: nowrap;
+    overflow: visible;
+}
+.ileco-nav-tab:hover { background: rgba(255,255,255,.1); color: #fff; }
+.ileco-nav-tab.active {
+    background: #f5a623; color: #0f1c3f;
+    box-shadow: 0 4px 14px rgba(245,166,35,.35);
+    z-index: 1;
+}
+.ileco-nav-tab .tab-icon { font-size: 18px; }
+.ileco-nav-badge {
+    position: absolute; top: -6px; right: -6px;
+    background: #ef4444; color: #fff;
+    font-size: 10px; font-weight: 800;
+    padding: 2px 6px; border-radius: 12px; min-width: 20px;
+    text-align: center; line-height: 1.4; display: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,.35);
+    animation: badge-pop 2s infinite;
+    z-index: 20;
+    pointer-events: none;
+}
+    @keyframes badge-pop { 0%,100%{transform:scale(1)} 50%{transform:scale(1.18)} }
+
+    @media (max-width:768px) {
+        .tab-label { display: none; }
+        .ileco-nav-tab { padding: 10px 14px; }
+    }
+    .ileco-header-right {
+        display: flex; align-items: center; gap: 10px;
+        margin-left: auto; flex-shrink: 0;
+    }
+    .ileco-live-pill {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 13px; border-radius: 20px;
+        background: rgba(16,185,129,.15); color: #10b981;
+        font-size: 12px; font-weight: 700;
+        border: 1px solid rgba(16,185,129,.3); white-space: nowrap;
+    }
+    .ileco-live-pill.offline { background: rgba(239,68,68,.12); color: #ef4444; border-color: rgba(239,68,68,.3); }
+    .ileco-live-dot { width:8px; height:8px; border-radius:50%; background:currentColor; animation: live-blink 2s infinite; }
+    @keyframes live-blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    .ileco-outage-widget { position: relative; }
+    .ileco-outage-btn {
+        display: flex; align-items: center; gap: 7px;
+        padding: 8px 14px;
+        background: rgba(239,68,68,.14); border: 1px solid rgba(239,68,68,.35);
+        border-radius: 10px; color: #fca5a5;
+        font-size: 13px; font-weight: 700; cursor: pointer;
+        transition: all .2s; font-family: inherit;
+    }
+    .ileco-outage-btn:hover { background: rgba(239,68,68,.24); color: #fff; }
+    .pulse-dot {
+        width:9px; height:9px; border-radius:50%; background:#ef4444;
+        animation: live-pulse 1.5s infinite;
+    }
+    @keyframes live-pulse {
+        0%,100%{ box-shadow: 0 0 0 0 rgba(239,68,68,.7); }
+        70%     { box-shadow: 0 0 0 7px rgba(239,68,68,0); }
+    }
+    .ileco-outage-dropdown {
+        display: none; position: absolute; top: calc(100% + 10px); right: 0;
+        width: 380px; background: #fff; border-radius: 14px;
+        box-shadow: 0 10px 48px rgba(0,0,0,.28);
+        border: 1px solid #e5e7eb; z-index: 3000; overflow: hidden;
+        animation: dd-in .15s ease;
+    }
+    .ileco-outage-dropdown.open { display: block; }
+    @keyframes dd-in { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+    .od-hdr {
+        background: linear-gradient(135deg,#dc2626,#b91c1c);
+        padding: 13px 17px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .od-hdr h3 { font-size:13px; font-weight:700; color:#fff; display:flex; align-items:center; gap:6px; }
+    .od-hdr a  { font-size:11px; color:rgba(255,255,255,.8); text-decoration:none; font-weight:600;
+                 padding:4px 9px; background:rgba(255,255,255,.15); border-radius:6px; }
+    .od-hdr a:hover { background:rgba(255,255,255,.25); color:#fff; }
+    .od-list { max-height:340px; overflow-y:auto; }
+    .od-item {
+        padding: 11px 16px; border-bottom: 1px solid #f3f4f6; cursor: pointer;
+        transition: background .15s; display: flex; gap: 11px; align-items: flex-start;
+        position: relative;
+    }
+    .od-item:last-child { border-bottom: none; }
+    .od-item:hover { background: #f0f7ff; }
+    .od-item:hover::after {
+        content: '→ View on map';
+        position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+        font-size: 10px; font-weight: 700; color: #2563eb;
+        background: #dbeafe; padding: 3px 8px; border-radius: 8px;
+    }
+    .od-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+    .od-dot.critical { background:#dc2626; animation:live-pulse 1.5s infinite; }
+    .od-dot.high     { background:#f59e0b; }
+    .od-dot.minor    { background:#10b981; }
+    .od-info  { flex:1; min-width:0; padding-right: 80px; }
+    .od-loc   { font-size:13px; font-weight:700; color:#111827; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .od-meta  { font-size:11px; color:#6b7280; margin-top:2px; display:flex; gap:8px; flex-wrap:wrap; }
+    .od-badge { padding:2px 7px; border-radius:10px; font-size:10px; font-weight:700; text-transform:uppercase; }
+    .od-badge.NEW      { background:#fee2e2; color:#991b1b; }
+    .od-badge.ASSIGNED { background:#fef3c7; color:#92400e; }
+    .od-empty { padding:32px 20px; text-align:center; color:#9ca3af; font-size:13px; }
+
+    .ileco-user-widget { position: relative; }
+    .ileco-user-btn {
+        display: flex; align-items: center; gap: 9px;
+        padding: 6px 13px 6px 6px;
+        background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.14);
+        border-radius: 28px; cursor: pointer; transition: all .2s; font-family: inherit;
+    }
+    .ileco-user-btn:hover { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.24); }
+    .ileco-user-avatar {
+        width:36px; height:36px; border-radius:50%;
+        background: linear-gradient(135deg,#f5a623,#f59e0b);
+        display:flex; align-items:center; justify-content:center;
+        font-size:14px; font-weight:900; color:#0f1c3f;
+        text-transform:uppercase; flex-shrink:0;
+    }
+    .ileco-user-info { text-align:left; line-height:1.2; }
+    .ileco-user-name { font-size:13px; font-weight:700; color:#fff; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ileco-user-role { font-size:10px; color:rgba(255,255,255,.5); text-transform:uppercase; letter-spacing:.5px; font-weight:600; }
+    .ileco-user-caret { font-size:10px; color:rgba(255,255,255,.45); transition:transform .2s; }
+    .ileco-user-dropdown {
+        display:none; position:absolute; top:calc(100% + 10px); right:0;
+        width:230px; background:#fff; border-radius:14px;
+        box-shadow:0 10px 48px rgba(0,0,0,.22);
+        border:1px solid #e5e7eb; z-index:3000; overflow:hidden;
+        animation: dd-in .15s ease;
+    }
+    .ileco-user-dropdown.open { display:block; }
+    .ud-head {
+        background: linear-gradient(135deg,#0f1c3f,#1e3270);
+        padding:18px; text-align:center;
+    }
+    .ud-avatar-lg {
+        width:54px; height:54px; border-radius:50%;
+        background: linear-gradient(135deg,#f5a623,#f59e0b);
+        display:flex; align-items:center; justify-content:center;
+        font-size:22px; font-weight:900; color:#0f1c3f;
+        margin:0 auto 10px; text-transform:uppercase;
+        box-shadow:0 4px 14px rgba(0,0,0,.3);
+    }
+    .ud-name { font-size:15px; font-weight:800; color:#fff; }
+    .ud-role { font-size:11px; color:rgba(255,255,255,.5); margin-top:3px; text-transform:uppercase; font-weight:600; }
+    .ud-menu { padding:8px; }
+    .ud-item {
+        display:flex; align-items:center; gap:10px;
+        padding:10px 13px; border-radius:8px; cursor:pointer;
+        font-size:13px; font-weight:600; color:#374151;
+        text-decoration:none; border:none; background:none;
+        width:100%; font-family:inherit; transition:background .15s;
+    }
+    .ud-item:hover { background:#f3f4f6; color:#111827; }
+    .ud-item.danger { color:#dc2626; }
+    .ud-item.danger:hover { background:#fee2e2; }
+    .ud-divider { height:1px; background:#f3f4f6; margin:4px 8px; }
+
+    .ileco-logout-overlay {
+        display:none; position:fixed; inset:0;
+        background:rgba(15,28,63,.65);
+        -webkit-backdrop-filter:blur(4px);
+        backdrop-filter:blur(4px);
+        z-index:9999; align-items:center; justify-content:center;
+    }
+    .ileco-logout-overlay.show { display:flex; }
+    .ileco-logout-box {
+        background:#fff; border-radius:18px; padding:36px;
+        max-width:380px; width:90%; text-align:center;
+        box-shadow:0 24px 72px rgba(0,0,0,.32); animation:dd-in .2s ease;
+    }
+    .lo-icon  { font-size:52px; margin-bottom:14px; }
+    .lo-title { font-size:22px; font-weight:800; color:#0f1c3f; margin-bottom:8px; }
+    .lo-sub   { font-size:14px; color:#6b7280; margin-bottom:28px; line-height:1.6; }
+    .lo-btns  { display:flex; gap:14px; justify-content:center; }
+    .lo-btn-cancel  { padding:12px 26px; background:#f3f4f6; color:#374151; border:none; border-radius:9px; font-weight:700; cursor:pointer; font-size:14px; font-family:inherit; }
+    .lo-btn-confirm { padding:12px 26px; background:linear-gradient(135deg,#dc2626,#b91c1c); color:#fff; border:none; border-radius:9px; font-weight:700; cursor:pointer; font-size:14px; text-decoration:none; display:inline-flex; align-items:center; gap:7px; }
+
+    /* ─── STATS BANNER ───────────────────────────────── */
+    .stats-banner {
+        padding: 15px 28px;
+        display: grid; gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
+        background: linear-gradient(135deg,#1e3c72 0%,#2a5298 100%);
+        box-shadow: 0 4px 12px rgba(0,0,0,.18);
+    }
+    .stat-card {
+        text-align:center; color:#fff;
+        background:rgba(255,255,255,.1);
+        padding:12px; border-radius:12px;
+        -webkit-backdrop-filter:blur(10px);
+        backdrop-filter:blur(10px); transition:all .3s;
+    }
+    .stat-card:hover { background:rgba(255,255,255,.15); transform:translateY(-2px); }
+    .stat-icon   { font-size:32px; margin-bottom:8px; }
+    .stat-number { font-size:36px; font-weight:800; color:#fbbf24; }
+    .stat-label  { font-size:12px; font-weight:700; text-transform:uppercase; color:#e5e7eb; margin-top:4px; }
+
+    /* ─── MAIN CONTAINER ─────────────────────────────── */
+    .container {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+        height: calc(100vh - 200px);
+    }
+    @media (max-width:900px) { .container { grid-template-columns:1fr; height:auto; } }
+
+    /* ─── MAP PANEL ──────────────────────────────────── */
+    .map-panel { display:flex; flex-direction:column; height:100%; }
+    .map-panel > div:last-child { flex:1; position:relative; }
+    .panel-header {
+        background:#2a5298; color:#fff; padding:14px 20px;
+        display:flex; justify-content:space-between; align-items:center;
+    }
+    .panel-header h2 { font-size:18px; font-weight:700; display:flex; align-items:center; gap:8px; }
+    .header-controls { display:flex; gap:8px; }
+    .control-btn {
+        background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.18);
+        color:#fff; padding:8px 14px; border-radius:8px; cursor:pointer;
+        font-weight:700; font-size:13px; transition:all .3s;
+    }
+    .control-btn.active { background:rgba(251,191,36,.3)!important; border:2px solid #fbbf24!important; color:#fbbf24!important; }
+    .control-btn:hover { background:rgba(255,255,255,.18); }
+    #map { height:100%; min-height:500px; width:100%; }
+    .zoom-indicator {
+        position:absolute; top:80px; right:20px;
+        background:#fff; color:#1e40af; padding:10px 14px;
+        border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,.12);
+        font-weight:700; z-index:1000; font-size:13px;
+    }
+    .legend {
+        position:absolute; bottom:26px; right:26px;
+        background:#fff; color:#111827; padding:16px;
+        border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.12);
+        z-index:1000; min-width:200px;
+    }
+    .legend-title { font-weight:800; color:#1e40af; margin-bottom:10px; font-size:14px; }
+    .legend-item  { display:flex; gap:10px; align-items:center; margin:8px 0; font-weight:600; font-size:13px; }
+    .legend-color { width:20px; height:20px; border-radius:6px; border:2px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.12); }
+    .legend-color.severe   { background:#dc2626; }
+    .legend-color.moderate { background:#f59e0b; }
+    .legend-color.minor    { background:#10b981; }
+    .legend-color.restored { background:#3b82f6; }
+
+    /* ─── DETAIL PANEL ───────────────────────────────── */
+    .detail-panel { height:100%; overflow:hidden; display:flex; flex-direction:column; }
+    .view-mode { flex:1; min-height:0; display:none; flex-direction:column; }
+    .view-mode.active { display:flex; }
+    .filter-bar {
+        padding:16px 20px; background:#f9fafb; border-bottom:1px solid #e5e7eb;
+        display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+    }
+    .filter-group { display:flex; align-items:center; gap:8px; }
+    .filter-group label { font-size:13px; font-weight:600; color:#374151; }
+    .filter-input, .filter-select {
+        padding:8px 12px; border:2px solid #e5e7eb;
+        border-radius:6px; font-size:13px; color:#111827; background:#fff;
+    }
+    .filter-input:focus, .filter-select:focus { outline:none; border-color:#2563eb; }
+    .filter-btn { padding:8px 16px; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; background:#2563eb; color:#fff; transition:all .3s; }
+    .filter-btn:hover { background:#1e40af; }
+    .filter-btn.secondary { background:#6b7280; }
+    .filter-btn.secondary:hover { background:#4b5563; }
+    .consumer-table-wrapper {
+        flex:1; min-height:0; overflow-y:auto; overflow-x:auto;
+        background:#fff; position:relative;
+        scrollbar-width:thin; scrollbar-color:#cbd5e1 #f1f5f9;
+    }
+    .consumer-table-wrapper::-webkit-scrollbar { width:10px; height:10px; }
+    .consumer-table-wrapper::-webkit-scrollbar-track { background:#f1f5f9; border-radius:5px; }
+    .consumer-table-wrapper::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:5px; }
+    .consumer-table-wrapper::-webkit-scrollbar-thumb:hover { background:#94a3b8; }
+    .consumer-table { width:100%; table-layout:fixed; border-collapse:collapse; }
+    .consumer-table td { word-wrap:break-word; overflow-wrap:break-word; }
+    .consumer-table thead { position:sticky; top:0; z-index:5; background:#2a5298; }
+    .consumer-table th { padding:14px 16px; text-align:left; font-size:12px; text-transform:uppercase; font-weight:700; color:#fff; border-bottom:2px solid #1e40af; }
+    .consumer-table td { padding:14px 16px; text-align:left; font-size:13px; border-bottom:1px solid #f3f4f6; color:#1f2937; background:#fff; }
+    .consumer-table tbody tr { background:#fff; transition:all .2s; }
+    .consumer-table tbody tr:hover { background:#f8fafc; cursor:pointer; }
+    .consumer-table tbody tr:nth-child(even) { background:#fafbfc; }
+    .consumer-table tbody tr:nth-child(even):hover { background:#f1f5f9; }
+    .cluster-info { padding:20px; background:linear-gradient(135deg,#f3f4f6,#e5e7eb); border-bottom:3px solid #2a5298; }
+    .cluster-title { font-size:20px; font-weight:800; color:#1e40af; margin-bottom:12px; }
+    .cluster-stats { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+    .cluster-stat { background:#fff; padding:12px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,.1); }
+    .cluster-stat-label { font-size:11px; text-transform:uppercase; color:#6b7280; font-weight:700; }
+    .cluster-stat-value { font-size:24px; font-weight:800; color:#1e40af; margin-top:4px; }
+    .search-bar { padding:16px 20px; background:#f9fafb; border-bottom:1px solid #e5e7eb; }
+    .search-input { width:100%; padding:10px 14px; border:2px solid #e5e7eb; border-radius:8px; font-size:14px; transition:all .3s; }
+    .search-input:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+    .status-badge { padding:6px 12px; border-radius:20px; font-weight:800; font-size:11px; display:inline-block; text-transform:uppercase; }
+    .status-badge.new      { background:#fee2e2; color:#991b1b; }
+    .status-badge.assigned { background:#fef3c7; color:#92400e; }
+    .status-badge.restored { background:#dbeafe; color:#1e40af; }
+    .severity-badge { padding:6px 12px; border-radius:20px; font-weight:800; font-size:11px; display:inline-block; }
+    .severity-badge.severe   { background:#dc2626; color:#fff; }
+    .severity-badge.moderate { background:#f59e0b; color:#fff; }
+    .severity-badge.minor    { background:#10b981; color:#fff; }
+    .severity-badge.restored { background:#3b82f6; color:#fff; }
+    .table-action-btn {
+    padding:6px 12px;
+    border:1.5px solid transparent;
+    border-radius:7px;
+    font-size:11.5px; font-weight:700; letter-spacing:.2px;
+    cursor:pointer; transition: background .15s ease, border-color .15s ease, color .15s ease;
+    display:inline-flex; align-items:center; gap:5px; white-space:nowrap; margin:2px;
+    background: transparent;
+}
+.table-action-btn:hover { transform:none; box-shadow:none; }
+.table-action-btn.view      { color:#2563eb; border-color:#bfdbfe; background:#eff6ff; }
+.table-action-btn.view:hover      { background:#dbeafe; border-color:#93c5fd; }
+.table-action-btn.assign    { color:#b45309; border-color:#fde68a; background:#fffbeb; }
+.table-action-btn.assign:hover    { background:#fef3c7; border-color:#fcd34d; }
+.table-action-btn.restored  { color:#047857; border-color:#a7f3d0; background:#ecfdf5; }
+.table-action-btn.restored:hover  { background:#d1fae5; border-color:#6ee7b7; }
+.table-action-btn.remove    { color:#b91c1c; border-color:#fecaca; background:#fef2f2; }
+.table-action-btn.remove:hover    { background:#fee2e2; border-color:#fca5a5; }
+.table-action-btn:disabled  { background:#f3f4f6; color:#9ca3af; border-color:#e5e7eb; cursor:not-allowed; opacity:.7; }
+    .RESTORED-text { color:#059669; font-weight:700; font-size:11px; }
+    .back-btn {
+        padding:8px 16px; background:rgba(255,255,255,.2);
+        border:1px solid rgba(255,255,255,.3); color:#fff;
+        border-radius:8px; cursor:pointer; font-weight:700;
+        font-size:13px; display:flex; align-items:center; gap:6px; transition:all .3s;
+    }
+    .back-btn:hover { background:rgba(255,255,255,.3); }
+    .remarks-textarea {
+    width:100%; padding:10px 12px; border:1.5px solid #e2e8f0;
+    border-radius:8px; font-size:13px; font-family:inherit;
+    color:#111827; background:#f9fafb; resize:none;
+    min-height:44px; max-height:220px; overflow-y:auto;
+    line-height:1.55; transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+    box-shadow:0 1px 2px rgba(0,0,0,.04); display:block;
+    }
+    .remarks-textarea:hover  { border-color:#cbd5e1; background:#fff; }
+    .remarks-textarea:focus  { outline:none; border-color:#2563eb; background:#fff; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+    .remarks-textarea::placeholder { color:#9ca3af; font-style:italic; }
+    .incident-cluster {
+        border-radius:50%; display:flex; align-items:center; justify-content:center;
+        color:#fff; font-weight:800; border:3px solid #fff;
+        box-shadow:0 6px 16px rgba(0,0,0,.25); cursor:pointer; transition:all .3s;
+    }
+    .incident-cluster:hover { transform:scale(1.1); }
+    .incident-cluster.severe   { background:#dc2626; }
+    .incident-cluster.moderate { background:#f59e0b; color:#66350b; }
+    .incident-cluster.minor    { background:#10b981; }
+    .incident-cluster.restored { background:#3b82f6; }
+    .consumer-marker { width:14px; height:14px; border-radius:50%; border:2px solid #fff; box-shadow:0 4px 12px rgba(0,0,0,.15); cursor:pointer; }
+    .consumer-marker.severe   { background:#dc2626; }
+    .consumer-marker.moderate { background:#f59e0b; }
+    .consumer-marker.minor    { background:#10b981; }
+    .consumer-marker.restored { background:#3b82f6; }
+    /* ─── LEAFLET POPUP FIXES — prevents clipping/cut-off ────────── */
+.leaflet-popup-content-wrapper {
+    border-radius: 12px !important;
+    box-shadow: 0 10px 32px rgba(0,0,0,.28) !important;
+}
+.leaflet-popup-content {
+    margin: 14px 18px !important;
+    max-height: 360px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+.leaflet-popup-content::-webkit-scrollbar { width: 6px; }
+.leaflet-popup-content::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+.incident-popup { min-width: 260px; max-width: 300px; color:#111827; }
+
+    .incident-popup { min-width:260px; color:#111827; }
+    .popup-header { background:#1e40af; color:#fff; font-weight:800; padding:12px 14px; margin:-12px -16px 12px -16px; border-radius:6px 6px 0 0; font-size:15px; }
+    .popup-field { margin:10px 0; font-size:13px; color:#0b1220; }
+    .popup-field strong { color:#1e40af; }
+    .modal { display:none; position:fixed; inset:0; align-items:center; justify-content:center; background:rgba(0,0,0,.6); z-index:2000; }
+    .modal.show { display:flex; }
+    .modal-content { width:90%; max-width:900px; max-height:90vh; overflow:auto; background:#fff; border-radius:12px; padding:28px; color:#111827; }
+    .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+    .modal-title { font-size:22px; font-weight:800; color:#0f172a; }
+    .close-btn { background:none; border:none; font-size:28px; cursor:pointer; color:#6b7280; }
+    .close-btn:hover { color:#1e40af; }
+    .loading { display:none; padding:40px; text-align:center; color:#64748b; }
+    .loading.show { display:block; }
+    .empty-state { padding:60px 20px; text-align:center; color:#9ca3af; }
+    .empty-state-icon { font-size:48px; margin-bottom:12px; }
+    .empty-state-text { font-size:16px; font-weight:600; }
+    .no-default { background:none!important; border:none!important; }
+    #ommsAssignModal { z-index:2100; }
+
+    @keyframes marker-highlight {
+        0%   { box-shadow: 0 0 0 0 rgba(37,99,235,.8); }
+        70%  { box-shadow: 0 0 0 18px rgba(37,99,235,0); }
+        100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+    }
+    .marker-highlighted { animation: marker-highlight 1.2s ease 3; }
+
+    /* ═══════════════════════════════════════════════════
+       FIX 1 — TYPE BREAKDOWN CHIPS (incident table)
+       Replaces the plain "type" text column with color-coded
+       chips built from the type_breakdown JSONB field.
+    ═══════════════════════════════════════════════════ */
+    .type-chips-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        align-items: flex-start;
+        max-width: 260px;
+    }
+    .type-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        border-radius: 20px;
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+        border: 1px solid transparent;
+        line-height: 1.4;
+    }
+    .type-chip.hazard  { background:#fee2e2; color:#991b1b; border-color:#fecaca; }
+    .type-chip.warning { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+    .type-chip.outage  { background:#eff6ff; color:#1e40af; border-color:#bfdbfe; }
+    .type-chip.medium  { background:#faf5ff; color:#6d28d9; border-color:#e9d5ff; }
+    .type-chip.count-badge {
+        background:#1e40af;
+        color:#fff;
+        border-radius:10px;
+        padding:1px 5px;
+        font-size:9px;
+        font-weight:800;
+        margin-left:2px;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       FIX 2 — CONSUMER SEVERITY BADGE
+       Per-row badge in Consumer Details panel showing the
+       individual incident_type mapped to a severity color.
+    ═══════════════════════════════════════════════════ */
+    .consumer-sev-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 16px;
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .3px;
+        white-space: nowrap;
+        margin-top: 4px;
+    }
+    .consumer-sev-badge.critical { background:#dc2626; color:#fff; }
+    .consumer-sev-badge.high     { background:#f59e0b; color:#fff; }
+    .consumer-sev-badge.medium   { background:#8b5cf6; color:#fff; }
+    .consumer-sev-badge.low      { background:#10b981; color:#fff; }
+    .consumer-sev-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: rgba(255,255,255,.75);
+        flex-shrink: 0;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       FIX 3 — PHOTO THUMBNAILS (consumer row)
+       Small clickable strip shown directly in the row.
+    ═══════════════════════════════════════════════════ */
+    .photo-thumb-strip {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        margin-top: 6px;
+    }
+    .photo-thumb {
+        width: 44px;
+        height: 44px;
+        border-radius: 6px;
+        object-fit: cover;
+        border: 2px solid #e5e7eb;
+        cursor: zoom-in;
+        transition: transform .15s, border-color .15s;
+        flex-shrink: 0;
+    }
+    .photo-thumb:hover {
+        transform: scale(1.08);
+        border-color: #2563eb;
+    }
+    .photo-more-badge {
+        width: 44px;
+        height: 44px;
+        border-radius: 6px;
+        background: #1e40af;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    /* ─── MODAL PHOTO GALLERY ────────────────────────── */
+    .modal-photo-gallery {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+    }
+    .modal-photo-thumb {
+        width: 100px;
+        height: 100px;
+        border-radius: 8px;
+        object-fit: cover;
+        border: 2px solid #e5e7eb;
+        cursor: zoom-in;
+        transition: transform .15s, border-color .15s;
+    }
+    .modal-photo-thumb:hover {
+        transform: scale(1.05);
+        border-color: #2563eb;
+    }
+
+    /* ─── LIGHTBOX ───────────────────────────────────── */
+    .lightbox-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.88);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 12px;
+        cursor: zoom-out;
+        animation: lbIn .18s ease;
+    }
+    @keyframes lbIn { from{opacity:0} to{opacity:1} }
+    .lightbox-img {
+        max-width: 92vw;
+        max-height: 82vh;
+        border-radius: 10px;
+        box-shadow: 0 8px 40px rgba(0,0,0,.5);
+        object-fit: contain;
+        cursor: default;
+    }
+    .lightbox-counter {
+        color: rgba(255,255,255,.7);
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .lightbox-nav {
+        position: fixed;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(255,255,255,.15);
+        border: none;
+        color: #fff;
+        font-size: 28px;
+        width: 52px; height: 52px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: background .15s;
+        z-index: 10001;
+    }
+    .lightbox-nav:hover { background: rgba(255,255,255,.3); }
+    .lightbox-nav.prev { left: 16px; }
+    .lightbox-nav.next { right: 16px; }
+    .lightbox-close {
+        position: fixed;
+        top: 16px; right: 20px;
+        background: rgba(255,255,255,.15);
+        border: none; color: #fff;
+        font-size: 22px; width: 42px; height: 42px;
+        border-radius: 50%; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        z-index: 10001;
+        transition: background .15s;
+    }
+    .lightbox-close:hover { background: rgba(255,255,255,.3); }
+
+    #ommsAssignModal { z-index:2100; }
+    /* Add anywhere in your existing <style> block */
+.cat-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 20px;
+    font-size: 10px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .4px;
+    white-space: nowrap;
+}
+.cat-badge.PI { background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; }
+.cat-badge.SE { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; animation: badge-pop 2s infinite; }
+.cat-badge.PQ { background:#f3e8ff; color:#6d28d9; border:1px solid #e9d5ff; }
+.cat-badge.AI { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
+.cat-badge.PL { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; }
+
+.pcode-badge {
+    display: inline-flex; align-items: center;
+    padding: 2px 7px; border-radius: 10px;
+    font-size: 9px; font-weight: 800;
+    margin-top: 3px;
+}
+.pcode-badge.P1 { background:#dc2626; color:#fff; }
+.pcode-badge.P2 { background:#f59e0b; color:#fff; }
+.pcode-badge.P3 { background:#3b82f6; color:#fff; }
+.pcode-badge.P4 { background:#6b7280; color:#fff; }
+.action-menu-wrap { position:relative; display:inline-block; }
+.action-menu-btn {
+    width:30px; height:30px; border-radius:8px;
+    border:1.5px solid #e5e7eb; background:#f9fafb; color:#374151;
+    font-size:16px; font-weight:900; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    line-height:1;
+}
+.action-menu-btn:hover { background:#eef2ff; border-color:#c7d2fe; color:#1e40af; }
+.action-menu-dropdown {
+    display:none; position:absolute; top:calc(100% + 6px); right:0;
+    min-width:150px; background:#fff; border:1px solid #e5e7eb;
+    border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.2);
+    z-index:200; overflow:hidden;
+}
+.action-menu-dropdown.open { display:block; }
+.action-menu-item {
+    display:flex; align-items:center; gap:8px; width:100%;
+    padding:10px 14px; border:none; background:none;
+    font-size:12px; font-weight:700; cursor:pointer; text-align:left;
+    white-space:nowrap;
+}
+.action-menu-item:hover { background:#f3f4f6; }
+.action-menu-item.view     { color:#2563eb; }
+.action-menu-item.assign   { color:#b45309; }
+.action-menu-item.restored { color:#047857; }
+.action-menu-item.remove   { color:#b91c1c; }
+    </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     SHARED HEADER
+═══════════════════════════════════════════════════ -->
+<header class="ileco-header">
+    <a href="/dashboard" class="ileco-brand">
+        <img src="/static/images/ileco1_logo.png"
+             alt="ILECO-1"
+             style="width:52px; height:52px; object-fit:contain; border-radius:10px; flex-shrink:0; filter:drop-shadow(0 2px 8px rgba(245,166,35,0.4));">
+        <span>ILECO<span class="accent">-1</span></span>
+    </a>
+
+    <nav class="ileco-nav">
+        <a href="/dashboard"       class="ileco-nav-tab active" id="navOutages">
+    <span class="tab-icon">⚡</span> <span class="tab-label">Outage Management Dashboard</span>
+    <span class="ileco-nav-badge" id="outagesBadge">0</span>
+</a>
+        <a href="/admin/outages"   class="ileco-nav-tab" id="navScheduled">
+            <span class="tab-icon">📅</span> Scheduled Outages
+            <span class="ileco-nav-badge" id="scheduledBadge">0</span>
+        </a>
+        <a href="/meter_dashboard" class="ileco-nav-tab" id="navMeter">
+            <span class="tab-icon">🔧</span> Meter Monitoring Dashboard
+            <span class="ileco-nav-badge" id="meterBadge">0</span>
+        </a>
+        <a href="/agent_queue"     class="ileco-nav-tab" id="navQueue">
+            <span class="tab-icon">💬</span> Service Desk Operations Dashboard
+            <span class="ileco-nav-badge" id="queueBadge">0</span>
+        </a>
+        <a href="/spam_monitor"    class="ileco-nav-tab" id="navSpam">
+            <span class="tab-icon">🛡️</span> Spam Monitor
+            <span class="ileco-nav-badge" id="spamBadge">0</span>
+        </a>
+        <a href="/feature_flags" class="ileco-nav-tab" id="navFlags">
+    <span class="tab-icon">🎛️</span> Feature Flags
+</a>
+    </nav>
+
+    <div class="ileco-header-right">
+        <div class="ileco-live-pill" id="livePill">
+            <span class="ileco-live-dot"></span>
+            <span id="livePillLabel">Connecting…</span>
+        </div>
+
+        <div class="ileco-outage-widget">
+            <button class="ileco-outage-btn" onclick="toggleOutageDropdown()">
+                <span class="pulse-dot"></span>
+                <span id="outageWidgetCount">0</span> Active
+            </button>
+            <div class="ileco-outage-dropdown" id="outageDropdown">
+                <div class="od-hdr">
+                    <h3>🚨 Active Outages — click to jump</h3>
+                    <a href="#" onclick="event.preventDefault();jumpToTodaysReports();">📅 Today</a>
+                </div>
+                <div class="od-list" id="odList"><div class="od-empty">Loading…</div></div>
+            </div>
+        </div>
+
+        <div class="ileco-user-widget" id="userWidget">
+            <button class="ileco-user-btn" id="userBtn" onclick="toggleUserDropdown()">
+                <div class="ileco-user-avatar" id="headerAvatar">?</div>
+                <div class="ileco-user-info">
+                    <div class="ileco-user-name" id="headerUsername">Loading…</div>
+                    <div class="ileco-user-role" id="headerRole">staff</div>
+                </div>
+                <span class="ileco-user-caret" id="userCaret">▼</span>
+            </button>
+            <div class="ileco-user-dropdown" id="userDropdown">
+                <div class="ud-head">
+                    <div class="ud-avatar-lg" id="ddAvatar">?</div>
+                    <div class="ud-name"   id="ddName">Loading…</div>
+                    <div class="ud-role"   id="ddRole">staff</div>
+                </div>
+                <div class="ud-menu">
+                    <a href="/user_management" class="ud-item" id="ddUserMgmt" style="display:none;">
+                        <span>👥</span> User Management
+                    </a>
+                    <div class="ud-divider"></div>
+                    <button class="ud-item danger" onclick="showLogout()">
+                        <span>🚪</span> Sign Out
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- Logout overlay -->
+<div class="ileco-logout-overlay" id="logoutOverlay">
+    <div class="ileco-logout-box">
+        <div class="lo-icon">🚪</div>
+        <div class="lo-title">Sign Out?</div>
+        <div class="lo-sub">Signed in as <strong id="logoutUserName"></strong>.<br>All unsaved data will be lost.</div>
+        <div class="lo-btns">
+            <button class="lo-btn-cancel" onclick="hideLogout()">Cancel</button>
+            <a class="lo-btn-confirm" href="/logout">🚪 Yes, Sign Out</a>
+        </div>
+    </div>
+</div>
+
+<!-- STATS BANNER -->
+<div class="stats-banner">
+    <div class="stat-card"><div class="stat-icon">⚠️</div><div class="stat-number" id="activeOutages">-</div><div class="stat-label">Active Outages</div></div>
+    <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-number" id="affectedConsumers">-</div><div class="stat-label">Affected Consumers</div></div>
+    <div class="stat-card"><div class="stat-icon">⚡</div><div class="stat-number" id="criticalIncidents">-</div><div class="stat-label">Critical Incidents</div></div>
+    <div class="stat-card"><div class="stat-icon">📊</div><div class="stat-number" id="reportsToday">-</div><div class="stat-label">Reports Today</div></div>
+</div>
+
+<!-- MAIN CONTAINER -->
+<div class="container">
+    <!-- MAP -->
+    <div class="map-panel">
+        <div class="panel-header">
+            <h2>🗺️ Outage Overview Map</h2>
+            <div class="header-controls">
+                <button id="clusterViewBtn"  class="control-btn" onclick="toggleMapView('cluster')">Cluster</button>
+                <button id="consumerViewBtn" class="control-btn" onclick="toggleMapView('consumer')">Individual</button>
+                <button id="smartViewBtn"    class="control-btn active" onclick="toggleMapView('auto')">🔄 Smart</button>
+            </div>
+        </div>
+        <div style="position:relative;flex:1;">
+            <div id="map"></div>
+            <div class="zoom-indicator" id="zoomIndicator">Zoom: 11 | Auto Mode</div>
+            <div class="legend">
+                <div class="legend-title">📊 Severity Legend</div>
+                <div class="legend-item"><div class="legend-color severe"></div><span>Severe</span></div>
+                <div class="legend-item"><div class="legend-color moderate"></div><span>Moderate</span></div>
+                <div class="legend-item"><div class="legend-color minor"></div><span>Minor</span></div>
+                <div class="legend-item"><div class="legend-color restored"></div><span>Restored</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DETAIL PANEL -->
+    <div class="detail-panel">
+        <!-- CLUSTER VIEW -->
+        <div id="clusterViewMode" class="view-mode active">
+            <div class="panel-header">
+                <h2>📋 Active Incidents</h2>
+            </div>
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <label>Status:</label>
+                    <select id="statusFilter" class="filter-select" onchange="applyFilters()">
+                        <option value="all">All</option>
+                        <option value="NEW">NEW</option>
+                        <option value="ASSIGNED">ASSIGNED</option>
+                        <option value="RESTORED">RESTORED</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Cluster:</label>
+                    <select id="clusterGroupFilter" class="filter-select" onchange="applyFilters()">
+                        <option value="all">All Clusters</option>
+                        <option value="POWER">⚡ Power Outage</option>
+                        <option value="SAFETY">🚨 Safety Emergency</option>
+                        <option value="ASSET">🔧 Asset Maintenance</option>
+                        <option value="LIGHT">💡 Streetlight</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>From:</label>
+                    <input type="datetime-local" id="dateFrom" class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label>To:</label>
+                    <input type="datetime-local" id="dateTo" class="filter-input">
+                </div>
+                <!-- next to the existing "Apply"/"Clear" buttons in the incident filter-bar -->
+<button class="filter-btn" onclick="applyFilters()">Apply</button>
+<button class="filter-btn secondary" onclick="clearFilters()">Clear</button>
+<button class="filter-btn" style="background:#059669;" onclick="exportIncidentsCSV()">⬇ Export CSV</button>
+            </div>
+            <!-- INCIDENT SEARCH BAR -->
+            <div style="padding:12px 20px;background:#f9fafb;border-bottom:1px solid #e5e7eb;display:flex;gap:10px;align-items:center;">
+                <input type="text" id="incidentSearch"
+                    placeholder="🔍 Search by location, consumer name, account #, type, status, or feeder…"
+                    style="flex:1;padding:9px 14px;border:2px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:inherit;transition:border-color .2s;"
+                    oninput="filterIncidentsBySearch(this.value)"
+                    onfocus="this.style.borderColor='#2563eb'"
+                    onblur="this.style.borderColor='#e5e7eb'">
+                <button onclick="filterIncidentsBySearch('');document.getElementById('incidentSearch').value='';"
+                    style="padding:9px 14px;background:#6b7280;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+                    Clear
+                </button>
+            </div>
+            <div class="loading" id="tableLoading"><div>⏳ Loading incidents…</div></div>
+            <div class="consumer-table-wrapper">
+                <table class="consumer-table">
+                    <thead>
+                        <tr>
+                            <!-- REPLACE WITH -->
+                            <th style="width:15%;">Location</th>
+<th style="width:8%;">Feeder</th>
+<th style="width:8%;">Category</th>
+<th style="width:14%;">Sub-Incident Types</th>
+<th style="width:5%;">Affected</th>
+<th style="width:7%;">Severity</th>
+<th style="width:7%;">Status</th>
+<th style="width:10%;">Assigned Time</th>
+<th style="width:10%;">Restored Time</th>
+<th style="width:11%;">Remarks</th>
+<th style="width:5%;text-align:center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="incidentTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- CONSUMER VIEW -->
+        <div id="consumerViewMode" class="view-mode">
+            <div class="panel-header">
+                <h2>👥 Consumer Details</h2>
+                <!-- in the consumer view header, next to the "← Back" button -->
+<button class="back-btn" onclick="showClusterView()">← Back</button>
+<button class="back-btn" style="background:#059669;border-color:#059669;" onclick="exportConsumersCSV()">⬇ Export CSV</button>
+            </div>
+            <div class="cluster-info" id="clusterInfo">
+                <div class="cluster-title" id="clusterTitle">Select a cluster</div>
+                <div class="cluster-stats">
+                    <div class="cluster-stat"><div class="cluster-stat-label">Affected</div><div class="cluster-stat-value" id="clusterAffected">-</div></div>
+                    <div class="cluster-stat"><div class="cluster-stat-label">Severity</div><div class="cluster-stat-value" id="clusterSeverity">-</div></div>
+                </div>
+            </div>
+            <div class="search-bar">
+                <input type="text" class="search-input" id="consumerSearch" placeholder="🔍 Search consumer…">
+            </div>
+            <div class="consumer-table-wrapper">
+                <table class="consumer-table">
+                    <thead>
+                        <tr>
+                            <th style="width:10%;">Account #</th>
+<th style="width:24%;">Consumer Name</th>
+<th style="width:10%;">Severity</th>
+<th style="width:16%;">Reported Time</th>
+<th style="width:9%;">Status</th>
+<th style="width:12%;">Assigned Time</th>
+<th style="width:13%;">Restored Time</th>
+<th style="width:6%;text-align:center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="consumerTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODALS -->
+<div id="incidentModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title" id="modalTitle">Incident Details</h2>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <div id="modalBody"></div>
+    </div>
+</div>
+
+<div id="ommsAssignModal" class="modal" style="z-index:2100;">
+    <div class="modal-content" style="max-width:600px;border-radius:14px;overflow:hidden;padding:0;">
+        <div style="background:linear-gradient(135deg,#1e3c72,#2a5298);padding:20px 24px;display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <span style="font-size:30px;">📋</span>
+                <div>
+                    <div style="font-size:17px;font-weight:800;color:#fff;">Assign to OMMS Job List</div>
+                    <div style="font-size:11px;color:#93c5fd;margin-top:2px;">Review fields for <code>public.converted</code></div>
+                </div>
+            </div>
+            <button onclick="closeOmmsAssignModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:34px;height:34px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">&times;</button>
+        </div>
+        <div style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:10px 20px;display:flex;gap:10px;align-items:flex-start;">
+            <span style="font-size:16px;flex-shrink:0;margin-top:2px;">ℹ️</span>
+            <p style="font-size:12px;color:#92400e;line-height:1.6;margin:0;">Clicking <strong>Confirm</strong> inserts into <code style="background:#fef3c7;padding:1px 5px;border-radius:4px;">public.converted</code> in the local OMMS database, then sets status to <strong>ASSIGNED</strong>.</p>
+        </div>
+        <div style="padding:18px 20px;background:#f9fafb;">
+            <div style="font-size:11px;font-weight:800;color:#1e40af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">🗂️ OMMS Preview</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div style="background:#fff;border-radius:7px;padding:10px 12px;border-left:4px solid #2563eb;"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">name</div><div id="ommsPreview_name" style="font-weight:700;color:#111827;font-size:13px;">—</div></div>
+                <div style="background:#fff;border-radius:7px;padding:10px 12px;border-left:4px solid #2563eb;"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">town / brgy</div><div id="ommsPreview_location" style="font-weight:700;color:#111827;font-size:13px;">—</div></div>
+                <div style="background:#fff;border-radius:7px;padding:10px 12px;border-left:4px solid #f59e0b;"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">feeder</div><div id="ommsPreview_feeder" style="font-weight:700;color:#d97706;font-size:13px;">—</div></div>
+                <div style="background:#fff;border-radius:7px;padding:10px 12px;border-left:4px solid #f59e0b;"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">subs</div><div id="ommsPreview_substation" style="font-weight:700;color:#d97706;font-size:13px;">—</div></div>
+                <div style="background:#fff;border-radius:7px;padding:10px 12px;border-left:4px solid #8b5cf6;"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">section</div><div id="ommsPreview_section" style="font-weight:700;color:#7c3aed;font-size:13px;">—</div></div>
+                <div style="background:#fff;border-radius:7px;padding:10px 12px;border-left:4px solid #dc2626;"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">cause</div><div id="ommsPreview_cause" style="font-weight:700;color:#dc2626;font-size:13px;">—</div></div>
+                <div style="background:#fff;border-radius:7px;padding:10px 12px;border-left:4px solid #6b7280;"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">equip</div><div id="ommsPreview_equip" style="font-weight:700;color:#374151;font-size:13px;">—</div></div>
+                <div style="background:#fff;border-radius:7px;padding:10px 12px;border-left:4px solid #dc2626;"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">type (priority)</div><div id="ommsPreview_priority" style="font-weight:700;color:#dc2626;font-size:13px;">—</div></div>
+                <div style="background:#fff;border-radius:7px;padding:10px 12px;border-left:4px solid #10b981;"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">phone</div><div id="ommsPreview_phone" style="font-weight:700;color:#059669;font-size:13px;">—</div></div>
+                <div style="background:#fff;border-radius:7px;padding:10px 12px;border-left:4px solid #10b981;"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">landmark</div><div id="ommsPreview_landmark" style="font-weight:700;color:#059669;font-size:13px;">—</div></div>
+            </div>
+            <div style="background:#fff;border-radius:7px;padding:10px 12px;border-left:4px solid #6366f1;margin-top:8px;"><div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:3px;">notes</div><div id="ommsPreview_notes" style="font-size:12px;color:#374151;line-height:1.5;">—</div></div>
+            <div style="margin-top:10px;padding:10px 14px;background:#d1fae5;border-radius:7px;font-size:12px;color:#065f46;font-weight:600;display:flex;gap:16px;flex-wrap:wrap;">
+                <span>✅ OMMS → <strong>On-going</strong></span>
+                <span>✅ Consumer → <strong>ASSIGNED</strong></span>
+                <span>✅ Incident → <strong>ASSIGNED</strong></span>
+            </div>
+        </div>
+        <div style="padding:14px 20px;background:#fff;border-top:1px solid #e5e7eb;display:flex;gap:10px;justify-content:flex-end;">
+            <button onclick="closeOmmsAssignModal()" style="padding:10px 20px;background:#6b7280;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;">Cancel</button>
+            <button id="ommsSubmitBtn" onclick="submitOmmsAssign()" style="padding:10px 24px;background:#f59e0b;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px;">📋 Confirm &amp; Send to OMMS</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   CSRF — auto-attach token to every same-origin
+   POST/PUT/DELETE fetch() call made from this page.
+   Fixes the gap where every admin action (assign,
+   restore, remove, remarks, OMMS assign, etc.) was
+   sending no CSRF token despite the backend requiring
+   one on session-authenticated write requests.
+═══════════════════════════════════════════════════ */
+(function(){
+    'use strict';
+    var _csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    var _origFetch = window.fetch;
+
+    window.fetch = function(input, init) {
+        init = init || {};
+        var method = (init.method || 'GET').toUpperCase();
+        var needsToken = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
+
+        var url = typeof input === 'string' ? input : (input && input.url) || '';
+        var isSameOrigin = url.startsWith('/') || url.startsWith(window.location.origin);
+
+        if (needsToken && isSameOrigin && _csrfToken) {
+            init.headers = Object.assign({}, init.headers, { 'X-CSRFToken': _csrfToken });
+        }
+        return _origFetch(input, init);
+    };
+})();
+
+/* ═══════════════════════════════════════════════════
+   SHARED HEADER LOGIC (IIFE)
+═══════════════════════════════════════════════════ */
+(function(){
+    'use strict';
+    function $(id){ return document.getElementById(id); }
+    function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function setText(id,t){ var el=$(id); if(el) el.textContent=t; }
+    function getInitials(n){ var p=(n||'').trim().split(/\s+/); return p.length>=2?(p[0][0]+p[p.length-1][0]).toUpperCase():(n||'?').substring(0,2).toUpperCase(); }
+    function timeAgoShort(iso){
+        if(!iso) return '';
+        try {
+            var raw = String(iso);
+            if(!raw.endsWith('Z') && raw.indexOf('+') === -1 && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(raw)) {
+                raw = raw + '+08:00';
+            }
+            var then = new Date(raw);
+            if(isNaN(then.getTime())) return '';
+            var s = Math.floor((Date.now() - then.getTime()) / 1000);
+            if(s < 0) s = 0;
+            if(s < 60)    return s + 's ago';
+            if(s < 3600)  return Math.floor(s/60) + 'm ago';
+            if(s < 86400) return Math.floor(s/3600) + 'h ago';
+            return Math.floor(s/86400) + 'd ago';
+        } catch(e) { return ''; }
+    }
+    function setBadge(id,n){ var el=$(id); if(!el)return; el.textContent=n; el.style.display=n>0?'block':'none'; }
+
+    async function loadUser(){
+        try{
+            var res=await fetch('/api/me',{credentials:'same-origin'});
+            var d=await res.json();
+            if(!d.success)return;
+            var u=d.user, name=u.full_name||u.username||'?', role=u.role||'staff', ini=getInitials(name);
+            window.CURRENT_USER_ROLE = role;
+            setText('headerAvatar',ini); setText('headerUsername',name); setText('headerRole',role);
+            setText('ddAvatar',ini); setText('ddName',name); setText('ddRole',role);
+            setText('logoutUserName',name);
+            if(role==='admin'||role==='superadmin'){ var m=$('ddUserMgmt'); if(m)m.style.display='flex'; }
+        }catch(e){}
+    }
+
+    async function loadOutages(){
+    try{
+        var res=await fetch('/api/recent_outages',{credentials:'same-origin'});
+        var d=await res.json();
+        var list=$('odList'), cnt=$('outageWidgetCount');
+        if(!list)return;
+        if(!d.success||!d.outages||!d.outages.length){
+            list.innerHTML='<div class="od-empty">✅ No active outages</div>';
+            if(cnt)cnt.textContent='0';
+            return;
+        }
+        if(cnt)cnt.textContent=d.outages.length;
+        list.innerHTML=d.outages.map(function(o){
+            var dot=(o.priority||'').toUpperCase()==='CRITICAL'?'critical'
+                   :(o.priority||'').toUpperCase()==='HIGH'?'high':'minor';
+            return '<div class="od-item" onclick="handleOutageWidgetClick('+o.incident_id+')" '
+                +  'title="Click to view on map and open consumer details">'
+                +    '<div class="od-dot '+dot+'"></div>'
+                +    '<div class="od-info">'
+                +      '<div class="od-loc">'
+                +        esc(o.barangay||'')+(o.town?', '+esc(o.town):'')
+                +      '</div>'
+                +      '<div class="od-meta">'
+                +        '<span class="od-badge '+o.status+'">'+esc(o.status)+'</span>'
+                +        '<span>'+(o.report_count||0)+' report'+(o.report_count!==1?'s':'')+'</span>'
+                +        (o.feeder_name?'<span>⚡ '+esc(o.feeder_name)+'</span>':'')
+                +        (o.first_report_time
+                            ?'<span class="ago-ticker" data-ts="'+esc(o.first_report_time)+'">'
+                            +  timeAgoShort(o.first_report_time)
+                            +'</span>'
+                            :'')
+                +      '</div>'
+                +    '</div>'
+                + '</div>';
+        }).join('');
+    }catch(e){}
+}
+
+/* ═══════════════════════════════════════════════════
+   LIVE "AGO" TICKER
+   Re-renders any element with class="ago-ticker" and a
+   data-ts attribute every 10 seconds, without re-fetching
+   or re-rendering the whole table.
+═══════════════════════════════════════════════════ */
+function tickAgoLabels() {
+    document.querySelectorAll('.ago-ticker').forEach(function(el) {
+        var ts = el.getAttribute('data-ts');
+        if (!ts) return;
+        var inConsumerTable = el.closest('#consumerTableBody');
+        if (inConsumerTable) {
+            el.textContent = '(' + timeAgo(ts) + ')';
+        } else {
+            el.textContent = timeAgoShort(ts);
+        }
+    });
+}
+setInterval(tickAgoLabels, 10000);
+    async function loadBadges(){
+        try{
+            var res=await fetch('/api/badge_counts',{credentials:'same-origin'});
+            var d=await res.json();
+            if(!d.success)return;
+            setBadge('outagesBadge',d.counts.outages);
+            setBadge('meterBadge',d.counts.meter);
+            setBadge('queueBadge',d.counts.queue);
+            setBadge('scheduledBadge',d.counts.scheduled||0);
+            setBadge('spamBadge', d.counts.spam || 0); 
+        }catch(e){}
+    }
+
+    var _outagePollTimer = null;
+
+    window.toggleOutageDropdown=function(){
+        var dd=$('outageDropdown'); if(!dd)return;
+        var open=dd.classList.toggle('open');
+        var ud=$('userDropdown'); if(ud)ud.classList.remove('open');
+        if(open){
+            loadOutages();
+            // Only poll while the dropdown is actually visible —
+            // previously this ran unconditionally every 15s for
+            // every logged-in tab, hitting the DB with a spatial
+            // join even when nobody was looking at the widget.
+            clearInterval(_outagePollTimer);
+            _outagePollTimer = setInterval(loadOutages, 15000);
+        } else {
+            clearInterval(_outagePollTimer);
+        }
+    };
+    window.toggleUserDropdown=function(){
+        var dd=$('userDropdown'),btn=$('userBtn'),c=$('userCaret'); if(!dd)return;
+        var open=dd.classList.toggle('open');
+        if(c)c.style.transform=open?'rotate(180deg)':'';
+        var od=$('outageDropdown'); if(od)od.classList.remove('open');
+    };
+    window.showLogout=function(){ var o=$('logoutOverlay'); if(o)o.classList.add('show'); var dd=$('userDropdown'); if(dd)dd.classList.remove('open'); };
+    window.hideLogout=function(){ var o=$('logoutOverlay'); if(o)o.classList.remove('show'); };
+
+    document.addEventListener('click',function(e){
+        var uw=$('userWidget'), ow=document.querySelector('.ileco-outage-widget');
+        if(uw&&!uw.contains(e.target)){ var dd=$('userDropdown'); if(dd)dd.classList.remove('open'); var c=$('userCaret'); if(c)c.style.transform=''; }
+        if(ow&&!ow.contains(e.target)){ var od=$('outageDropdown'); if(od)od.classList.remove('open'); }
+    });
+    document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ hideLogout(); var dd=$('userDropdown'); if(dd)dd.classList.remove('open'); } });
+
+    window.setLiveStatus=function(on){ var p=$('livePill'),l=$('livePillLabel'); if(!p||!l)return; p.className='ileco-live-pill'+(on?'':' offline'); l.textContent=on?'Live':'Offline'; };
+    window.headerRefreshBadges=loadBadges;
+
+    function init(){ loadUser(); loadBadges(); setInterval(loadBadges,120000); }
+    // NOTE: loadOutages() polling now only runs while the dropdown is
+    // open (see toggleOutageDropdown above) — it no longer runs on an
+    // unconditional 15s global timer.
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
+
+/* ═══════════════════════════════════════════════════
+   HANDLE OUTAGE WIDGET CLICK
+═══════════════════════════════════════════════════ */
+window.handleOutageWidgetClick = async function(incidentId) {
+    var dd = document.getElementById('outageDropdown');
+    if (dd) dd.classList.remove('open');
+    showNotification('📍 Jumping to incident #' + incidentId + '…', 'info');
+    var incident = null;
+    for (var attempt = 0; attempt < 15; attempt++) {
+        incident = currentIncidents.find(function(i){ return i.incident_id === incidentId; });
+        if (incident) break;
+        await new Promise(function(r){ setTimeout(r, 200); });
+    }
+    if (!incident) {
+        await refreshData();
+        incident = currentIncidents.find(function(i){ return i.incident_id === incidentId; });
+    }
+    if (!incident) {
+        showNotification('⚠️ Incident #' + incidentId + ' not found in current data', 'error');
+        return;
+    }
+    viewMode = 'auto';
+    document.getElementById('smartViewBtn')?.classList.add('active');
+    document.getElementById('clusterViewBtn')?.classList.remove('active');
+    document.getElementById('consumerViewBtn')?.classList.remove('active');
+    if (incident.lat != null && incident.lng != null) {
+        map.flyTo([incident.lat, incident.lng], 13, { animate: true, duration: 1.0 });
+        setTimeout(function() {
+            renderMap(currentIncidents);
+            incidentMarkers.eachLayer(function(layer) {
+                var ll = layer.getLatLng();
+                if (Math.abs(ll.lat - incident.lat) < 0.001 && Math.abs(ll.lng - incident.lng) < 0.001) {
+                    layer.openPopup();
+                    var el = layer.getElement ? layer.getElement() : null;
+                    if (el) {
+                        el.classList.add('marker-highlighted');
+                        setTimeout(function(){ el.classList.remove('marker-highlighted'); }, 4000);
+                    }
+                }
+            });
+            showConsumerDetails(incident);
+        }, 1100);
+    } else {
+        showConsumerDetails(incident);
+        showNotification('⚠️ No GPS location for this incident', 'info');
+    }
+};
+
+
+/* ═══════════════════════════════════════════════════
+   MAP + DASHBOARD LOGIC
+═══════════════════════════════════════════════════ */
+const map = L.map('map', { preferCanvas: true }).setView([10.7115, 122.4240], 11);
+const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', maxZoom: 19 });
+async function initSatelliteLayer() {
+    try {
+        const res = await fetch('/api/map_config', {credentials: 'same-origin'});
+        const data = await res.json();
+        if (data.mapbox_token) {
+            window._satelliteLayer = L.tileLayer(
+                `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=${data.mapbox_token}`,
+                {tileSize: 512, zoomOffset: -1, maxZoom: 22}
+            );
+        }
+    } catch(e) { console.warn('Map config unavailable'); }
+}
+streetLayer.addTo(map);
+initSatelliteLayer().then(() => {
+    if (window._satelliteLayer) {
+        L.control.layers({"🗺️ Street Map": streetLayer, "🛰️ Satellite": window._satelliteLayer}, null, {position: 'topright'}).addTo(map);
+    } else {
+        L.control.layers({"🗺️ Street Map": streetLayer}, null, {position: 'topright'}).addTo(map);
+    }
+});
+
+let socket=null, viewMode='auto';
+let singleMarkerMode=false; // ← ADD HERE, in the original declaration block only
+let incidentMarkers=L.layerGroup().addTo(map), consumerMarkers=L.markerClusterGroup({maxClusterRadius:40});
+let currentIncidents=[], currentConsumerReports=[], selectedIncident=null, allConsumers=[];
+let currentFilters={status:'all',dateFrom:null,dateTo:null};
+
+/* ═══════════════════════════════════════════════════
+   INCIDENT TYPE DEFINITIONS
+   Central source of truth for labels, icons, severity
+   class, and chip color used across all three fixes.
+═══════════════════════════════════════════════════ */
+const INCIDENT_TYPE_MAP = {
+    power_outage:      { label:'Power Outage',         icon:'⚡', chip:'outage',  sev:'high'     },
+    partial_outage:    { label:'Partial Outage',        icon:'⚡', chip:'outage',  sev:'high'     },
+    voltage_issue:     { label:'Voltage Problem',       icon:'📊', chip:'outage',  sev:'high'     },
+    sdi_problem:       { label:'No Power (House Only)', icon:'🏠', chip:'medium',  sev:'medium'   },
+    streetlight:       { label:'Streetlight',           icon:'💡', chip:'medium',  sev:'medium'   },
+    fallen_wire:       { label:'Fallen Wire',           icon:'⚠️', chip:'hazard',  sev:'critical' },
+    leaning_pole:      { label:'Leaning Pole',          icon:'🔧', chip:'warning', sev:'high'     },
+    tree_branch:       { label:'Tree on Line',          icon:'🌳', chip:'warning', sev:'high'     },
+    vegetation_clearing:{ label:'Vegetation Clearing',  icon:'🌳', chip:'medium',  sev:'medium'   },
+    vehicular_accident:{ label:'Vehicular Accident',    icon:'🚗', chip:'hazard',  sev:'critical' },
+    transformer_issue: { label:'Transformer Issue',     icon:'💥', chip:'hazard',  sev:'critical' },
+    fire_hazard:       { label:'Fire / Burning',        icon:'🔥', chip:'hazard',  sev:'critical' },
+    sparking:          { label:'Sparking / Arcing',     icon:'⚡', chip:'hazard',  sev:'critical' },
+    equipment_damage:  { label:'Equipment Damage',      icon:'🔧', chip:'warning', sev:'high'     },
+    other:             { label:'Other Emergency',       icon:'📋', chip:'warning', sev:'high'     },
+};
+
+/* ─── get severity class for a single incident_type ── */
+function getSeverityClassForType(incidentType) {
+    const entry = INCIDENT_TYPE_MAP[incidentType];
+    if (!entry) return 'high';
+    return entry.sev; // 'critical' | 'high' | 'medium' | 'low'
+}
+
+/* ─── consumer severity badge HTML ─────────────────── */
+function buildConsumerSevBadge(incidentType, priority) {
+    // Priority from the report object takes precedence for display
+    var sevClass = 'high';
+    var sevLabel = 'High';
+    var sevIcon  = '🟠';
+
+    const typEntry = INCIDENT_TYPE_MAP[incidentType];
+    if (typEntry) {
+        sevClass = typEntry.sev;
+    }
+    // Override with the explicit priority if present
+    if (priority) {
+        const p = (priority).toUpperCase();
+        if (p === 'CRITICAL') { sevClass='critical'; }
+        else if (p === 'MEDIUM') { sevClass='medium'; }
+        else if (p === 'LOW')    { sevClass='low'; }
+        else { sevClass='high'; }
+    }
+
+    const SEV_CFG = {
+        critical: { label:'🔴 Critical', icon:'🔴' },
+        high:     { label:'🟠 High',     icon:'🟠' },
+        medium:   { label:'🟡 Medium',   icon:'🟡' },
+        low:      { label:'🟢 Low',      icon:'🟢' },
+    };
+    const cfg = SEV_CFG[sevClass] || SEV_CFG.high;
+    return `<span class="consumer-sev-badge ${sevClass}"><span class="consumer-sev-dot"></span>${cfg.label}</span>`;
+}
+
+/* ─── type breakdown chips HTML ────────────────────── */
+function buildTypeChips(typeBreakdown, dominantType) {
+    // If we have a rich type_breakdown object, render all chips from it
+    if (typeBreakdown && typeof typeBreakdown === 'object') {
+        const keys = Object.keys(typeBreakdown);
+        if (keys.length > 0) {
+            return '<div class="type-chips-wrap">'
+                + keys.map(function(k) {
+                    const cnt  = typeBreakdown[k] || 0;
+                    const meta = INCIDENT_TYPE_MAP[k] || { label: k.replace(/_/g,' '), icon:'📋', chip:'outage' };
+                    return `<span class="type-chip ${meta.chip}">`
+                         + `${meta.icon} ${esc(meta.label)}`
+                         + (cnt > 1 ? `<span class="count-badge">×${cnt}</span>` : '')
+                         + `</span>`;
+                }).join('')
+                + '</div>';
+        }
+    }
+    // Fallback: single chip from dominantType
+    const meta = INCIDENT_TYPE_MAP[dominantType] || { label:(dominantType||'Unknown').replace(/_/g,' '), icon:'📋', chip:'outage' };
+    return `<div class="type-chips-wrap"><span class="type-chip ${meta.chip}">${meta.icon} ${esc(meta.label)}</span></div>`;
+}
+
+function toggleActionMenu(id, ev){
+    ev.stopPropagation();
+    var target = document.getElementById(id);
+    var wasOpen = target.classList.contains('open');
+
+    function restore(d){
+        d.classList.remove('open');
+        var home = d.dataset.homeParent ? document.getElementById(d.dataset.homeParent) : null;
+        if (home) home.appendChild(d);
+        d.style.position = '';
+        d.style.top = '';
+        d.style.left = '';
+        d.style.right = '';
+        d.style.zIndex = '';
+    }
+
+    document.querySelectorAll('.action-menu-dropdown.open').forEach(restore);
+
+    if (!wasOpen) {
+        var btn = ev.currentTarget || (ev.target.closest && ev.target.closest('.action-menu-btn'));
+        var rect = btn.getBoundingClientRect();
+
+        if (!target.dataset.homeParent) {
+            target.dataset.homeParent = target.parentElement.id;
+        }
+
+        document.body.appendChild(target);
+        target.style.position = 'fixed';
+        target.style.top   = (rect.bottom + 6) + 'px';
+        target.style.right = (window.innerWidth - rect.right) + 'px';
+        target.style.left  = 'auto';
+        target.style.zIndex = 5000;
+
+        target.classList.add('open');
+    }
+}
+
+document.addEventListener('click', function(e){
+    if (!e.target.closest('.action-menu-wrap') && !e.target.closest('.action-menu-dropdown')) {
+        document.querySelectorAll('.action-menu-dropdown.open').forEach(function(d){
+            d.classList.remove('open');
+            var home = d.dataset.homeParent ? document.getElementById(d.dataset.homeParent) : null;
+            if (home) home.appendChild(d);
+            d.style.position = '';
+            d.style.top = '';
+            d.style.left = '';
+            d.style.right = '';
+            d.style.zIndex = '';
+        });
+    }
+});
+function buildIncidentActionMenu(inc){
+    var id = 'incMenu_' + inc.incident_id;
+    var wrapId = 'incWrap_' + inc.incident_id;
+    var items = '<button class="action-menu-item view" onclick="event.stopPropagation();this.closest(\'.action-menu-dropdown\').classList.remove(\'open\');'
+        + 'showConsumerDetails(currentIncidents.find(function(x){return x.incident_id===' + inc.incident_id + ';}));">👁️ View</button>';
+    if (inc.status === 'NEW') {
+        items += '<button class="action-menu-item assign" onclick="event.stopPropagation();this.closest(\'.action-menu-dropdown\').classList.remove(\'open\');assignIncidentFromTable(' + inc.incident_id + ')">📋 Assign</button>'
+               + '<button class="action-menu-item restored" onclick="event.stopPropagation();this.closest(\'.action-menu-dropdown\').classList.remove(\'open\');restoredIncidentFromTable(' + inc.incident_id + ')">✓ Restored</button>';
+    } else if (inc.status === 'ASSIGNED') {
+        items += '<button class="action-menu-item restored" onclick="event.stopPropagation();this.closest(\'.action-menu-dropdown\').classList.remove(\'open\');restoredIncidentFromTable(' + inc.incident_id + ')">✓ Restored</button>';
+    }
+    if (window.CURRENT_USER_ROLE === 'superadmin') {
+        items += '<button class="action-menu-item remove" onclick="event.stopPropagation();this.closest(\'.action-menu-dropdown\').classList.remove(\'open\');removeIncident(' + inc.incident_id + ')">🗑️ Remove</button>';
+    }
+    return '<div class="action-menu-wrap" id="' + wrapId + '" onclick="event.stopPropagation()">'
+        + '<button class="action-menu-btn" onclick="toggleActionMenu(\'' + id + '\', event)">⋮</button>'
+        + '<div class="action-menu-dropdown" id="' + id + '">' + items + '</div>'
+        + '</div>';
+}
+
+function buildConsumerActionMenu(c){
+    var id = 'consMenu_' + c.report_id;
+    var wrapId = 'consWrap_' + c.report_id;
+    var items;
+    if (c.status === 'RESTORED') {
+        items = '<div style="padding:10px 14px;font-size:12px;font-weight:700;color:#059669;">✓ RESTORED</div>';
+    } else {
+        items = '';
+        if (c.status === 'NEW') items += '<button class="action-menu-item assign" onclick="event.stopPropagation();this.closest(\'.action-menu-dropdown\').classList.remove(\'open\');assignConsumer(' + c.report_id + ')">📋 Assign</button>';
+        items += '<button class="action-menu-item restored" onclick="event.stopPropagation();this.closest(\'.action-menu-dropdown\').classList.remove(\'open\');restoredConsumer(' + c.report_id + ')">✓ Restored</button>';
+    }
+    if (window.CURRENT_USER_ROLE === 'superadmin') {
+        items += '<button class="action-menu-item remove" onclick="event.stopPropagation();this.closest(\'.action-menu-dropdown\').classList.remove(\'open\');removeReport(' + c.report_id + ')">🗑️ Remove</button>';
+    }
+    return '<div class="action-menu-wrap" id="' + wrapId + '" onclick="event.stopPropagation()">'
+        + '<button class="action-menu-btn" onclick="toggleActionMenu(\'' + id + '\', event)">⋮</button>'
+        + '<div class="action-menu-dropdown" id="' + id + '">' + items + '</div>'
+        + '</div>';
+}
+/* ─── photo thumbnails strip (for consumer table row) ─ */
+function buildPhotoThumbStrip(photoUrls) {
+    if (!photoUrls || !photoUrls.length) return '';
+    const MAX_SHOW = 2;
+    const urlsEsc = photoUrls.map(u => esc(u));
+    const urlsJson = JSON.stringify(photoUrls).replace(/"/g, '&quot;');
+    let html = `<div class="photo-thumb-strip" onclick="event.stopPropagation()">`;
+    photoUrls.slice(0, MAX_SHOW).forEach(function(url, idx) {
+        html += `<img class="photo-thumb" src="${esc(url)}" alt="Photo ${idx+1}"
+                      loading="lazy" decoding="async"
+                      onclick="openLightbox(${urlsJson}, ${idx})"
+                      onerror="this.style.display='none'">`;
+    });
+    if (photoUrls.length > MAX_SHOW) {
+        html += `<div class="photo-more-badge" onclick="openLightbox(${urlsJson}, 0)">+${photoUrls.length - MAX_SHOW}</div>`;
+    }
+    html += '</div>';
+    return html;
+}
+
+/* ─── photo gallery for modal ───────────────────────── */
+function buildModalPhotoGallery(photoUrls) {
+    if (!photoUrls || !photoUrls.length) return '';
+    const urlsJson = JSON.stringify(photoUrls).replace(/"/g, '&quot;');
+    let html = '<div style="margin-bottom:20px;">'
+             + '<h3 style="color:#1e40af;margin-bottom:10px;font-size:16px;">📷 Attached Photos</h3>'
+             + '<div class="modal-photo-gallery">';
+    photoUrls.forEach(function(url, idx) {
+        html += `<img class="modal-photo-thumb" src="${esc(url)}" alt="Photo ${idx+1}"
+                      loading="lazy" decoding="async"
+                      onclick="openLightbox(${urlsJson}, ${idx})"
+                      onerror="this.style.display='none'">`;
+    });
+    html += '</div></div>';
+    return html;
+}
+
+/* ═══════════════════════════════════════════════════
+   LIGHTBOX
+═══════════════════════════════════════════════════ */
+let _lbUrls = [], _lbIdx = 0;
+
+function openLightbox(urls, startIdx) {
+    _lbUrls = Array.isArray(urls) ? urls : [urls];
+    _lbIdx  = startIdx || 0;
+    _renderLightbox();
+}
+
+function _renderLightbox() {
+    // Remove existing lightbox if any
+    const old = document.getElementById('_lightboxOverlay');
+    if (old) old.remove();
+
+    if (!_lbUrls.length) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = '_lightboxOverlay';
+    overlay.className = 'lightbox-overlay';
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) closeLightbox();
+    });
+
+    const img = document.createElement('img');
+    img.className = 'lightbox-img';
+    img.src = _lbUrls[_lbIdx];
+    img.alt = 'Photo ' + (_lbIdx + 1);
+    img.onclick = function(e) { e.stopPropagation(); };
+
+    const counter = document.createElement('div');
+    counter.className = 'lightbox-counter';
+    counter.textContent = (_lbIdx + 1) + ' / ' + _lbUrls.length;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'lightbox-close';
+    closeBtn.innerHTML = '✕';
+    closeBtn.onclick = closeLightbox;
+
+    overlay.appendChild(closeBtn);
+    overlay.appendChild(img);
+    overlay.appendChild(counter);
+
+    if (_lbUrls.length > 1) {
+        const prev = document.createElement('button');
+        prev.className = 'lightbox-nav prev';
+        prev.innerHTML = '‹';
+        prev.onclick = function(e) { e.stopPropagation(); _lbIdx = (_lbIdx - 1 + _lbUrls.length) % _lbUrls.length; _renderLightbox(); };
+
+        const next = document.createElement('button');
+        next.className = 'lightbox-nav next';
+        next.innerHTML = '›';
+        next.onclick = function(e) { e.stopPropagation(); _lbIdx = (_lbIdx + 1) % _lbUrls.length; _renderLightbox(); };
+
+        overlay.appendChild(prev);
+        overlay.appendChild(next);
+    }
+
+    document.body.appendChild(overlay);
+}
+
+function closeLightbox() {
+    const el = document.getElementById('_lightboxOverlay');
+    if (el) el.remove();
+}
+
+document.addEventListener('keydown', function(e) {
+    const lb = document.getElementById('_lightboxOverlay');
+    if (!lb) return;
+    if (e.key === 'Escape')      { closeLightbox(); }
+    else if (e.key === 'ArrowLeft')  { _lbIdx = (_lbIdx - 1 + _lbUrls.length) % _lbUrls.length; _renderLightbox(); }
+    else if (e.key === 'ArrowRight') { _lbIdx = (_lbIdx + 1) % _lbUrls.length; _renderLightbox(); }
+});
+
+/* ═══════════════════════════════════════════════════
+   UTILITY FUNCTIONS
+═══════════════════════════════════════════════════ */
+function timeAgo(iso){
+    if(!iso||iso==='None'||iso==='null'||iso==='undefined') return 'N/A';
+    try {
+        var raw = String(iso);
+        if(!raw.endsWith('Z') && raw.indexOf('+') === -1 && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(raw)) {
+            raw = raw + '+08:00';
+        }
+        var then = new Date(raw);
+        if(isNaN(then.getTime())) return 'N/A';
+        var diff = Math.floor((Date.now() - then.getTime()) / 1000);
+        if(diff < 0) diff = 0;
+        if(diff < 60)    return diff + 's ago';
+        if(diff < 3600)  return Math.floor(diff/60) + 'm ago';
+        if(diff < 86400) return Math.floor(diff/3600) + 'h ago';
+        return Math.floor(diff/86400) + 'd ago';
+    } catch(e) { return 'N/A'; }
+}
+function formatDateTime(iso){ if(!iso||iso==='None'||iso==='null'||iso==='undefined')return 'N/A'; try{ var d=new Date(iso); if(isNaN(d.getTime()))return 'N/A'; return d.toLocaleString('en-PH',{timeZone:'Asia/Manila',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}); }catch(e){return 'N/A';} }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+let _dashDebounce=null;
+function debouncedRefresh(){ clearTimeout(_dashDebounce); _dashDebounce=setTimeout(()=>{refreshData();headerRefreshBadges();},500); }
+
+async function loadBadgeCounts(){
+    try{ var res=await fetch('/api/badge_counts',{credentials:'same-origin'}); var data=await res.json(); if(!data.success)return;
+    function setBE(id,n){var el=document.getElementById(id);if(!el)return;el.textContent=n;el.style.display=n>0?'block':'none';}
+    setBE('outagesBadge',data.counts.outages); setBE('meterBadge',data.counts.meter); setBE('queueBadge',data.counts.queue); }catch(_){}
+}
+
+function initializeWebSocket(){
+    socket=io({
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        transports: ['websocket', 'polling'],
+        upgrade: true
+    });
+    socket.on('connect',()=>{ window.setLiveStatus(true); });
+    socket.on('disconnect',()=>{ window.setLiveStatus(false); });
+    socket.on('new_incident',(d)=>{ var t=d.priority==='CRITICAL'?'🚨 CRITICAL: ':'⚡ New: '; showNotification(t+d.town+'/'+d.barangay,d.priority==='CRITICAL'?'error':'info'); debouncedRefresh(); });
+    socket.on('incident_updated',()=>debouncedRefresh());
+    socket.on('incident_removed',()=>debouncedRefresh());
+    socket.on('stats_update',()=>{ fetch('/api/dashboard_stats',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d.success)updateStats(d.stats);}).catch(()=>{}); });
+    socket.on('incident_followup', (d) => {
+        const rows = document.querySelectorAll('#incidentTableBody tr');
+        rows.forEach(row => {
+            if (row.dataset.incidentId && parseInt(row.dataset.incidentId) === d.incident_id) {
+                const cells = row.querySelectorAll('td');
+                if (cells[3]) {
+                    cells[3].innerHTML = `<strong>${d.report_count}</strong>`;
+                    cells[3].style.transition = 'background 0.3s';
+                    cells[3].style.background = '#d1fae5';
+                    setTimeout(() => { cells[3].style.background = ''; }, 2500);
+                }
+            }
+        });
+        showNotification(`⚠️ Follow-up from ${d.barangay}, ${d.town} — ${d.message}`, 'info');
+        debouncedRefresh();
+    });
+}
+
+async function refreshData(){
+    try{
+        var [incRes,statsRes,reportsRes]=await Promise.all([fetch('/api/incidents?status=all',{credentials:'same-origin'}),fetch('/api/dashboard_stats',{credentials:'same-origin'}),fetch('/api/map_reports',{credentials:'same-origin'})]);
+        var [incData,statsData,reportsData]=await Promise.all([incRes.json(),statsRes.json(),reportsRes.json()]);
+        if(incData?.success)   currentIncidents=incData.incidents||[];
+        if(reportsData?.success) currentConsumerReports=reportsData.reports||[];
+        if(statsData?.success) updateStats(statsData.stats);
+        applyFilters();
+    }catch(e){ console.error('Refresh failed:',e); }
+}
+
+function updateStats(stats){ var s=(id,v)=>{var el=document.getElementById(id);if(el)el.textContent=v;}; s('activeOutages',stats.active_outages||0); s('affectedConsumers',stats.affected_consumers||0); s('criticalIncidents',stats.critical_incidents||0); s('reportsToday',stats.reports_today||0); }
+
+async function saveIncidentPosition(incidentId, lat, lng){
+    try{
+        var res = await fetch('/api/incident/'+incidentId+'/update_position',{
+            method:'POST', headers:{'Content-Type':'application/json'},
+            credentials:'same-origin', body:JSON.stringify({lat:lat,lng:lng})
+        });
+        var data = await res.json();
+        if(data.success){
+            var inc = currentIncidents.find(i=>i.incident_id===incidentId);
+            if(inc){ inc.lat=lat; inc.lng=lng; }
+            showNotification('📍 Position saved','success');
+        } else showNotification('Failed to save position: '+(data.error||''),'error');
+    }catch(e){ showNotification('Network error saving position','error'); }
+}
+
+async function saveReportPosition(reportId, lat, lng){
+    try{
+        var res = await fetch('/api/report/'+reportId+'/update_position',{
+            method:'POST', headers:{'Content-Type':'application/json'},
+            credentials:'same-origin', body:JSON.stringify({lat:lat,lng:lng})
+        });
+        var data = await res.json();
+        if(data.success){
+            var r = currentConsumerReports.find(x=>(x.report_id||x.id)===reportId);
+            if(r){ r.lat=lat; r.lng=lng; }
+            showNotification('📍 Position saved','success');
+        } else showNotification('Failed to save position: '+(data.error||''),'error');
+    }catch(e){ showNotification('Network error saving position','error'); }
+}
+function autoResizeRemarks(el){
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 220) + 'px';
+}
+let _currentFilteredIncidents = [];
+
+function applyFilters(){
+    var statusFilter=document.getElementById('statusFilter').value;
+    var clusterFilter=document.getElementById('clusterGroupFilter')?.value || 'all';
+    var fromInput=document.getElementById('dateFrom').value;
+    var toInput=document.getElementById('dateTo').value;
+    currentFilters.status=statusFilter;
+    currentFilters.clusterGroup=clusterFilter;
+    currentFilters.dateFrom=fromInput?new Date(fromInput):null;
+    currentFilters.dateTo=toInput?new Date(toInput):null;
+    var filtered=currentIncidents;
+    if(statusFilter&&statusFilter.toUpperCase()!=='ALL') filtered=filtered.filter(i=>i.status===statusFilter.toUpperCase());
+    if(clusterFilter&&clusterFilter.toUpperCase()!=='ALL') filtered=filtered.filter(i=>getClusterGroup(i)===clusterFilter.toUpperCase());
+    if(currentFilters.dateFrom||currentFilters.dateTo){ filtered=filtered.filter(i=>{ var d=new Date(i.first_report_time); if(currentFilters.dateFrom&&currentFilters.dateTo)return d>=currentFilters.dateFrom&&d<=currentFilters.dateTo; if(currentFilters.dateFrom)return d>=currentFilters.dateFrom; if(currentFilters.dateTo)return d<=currentFilters.dateTo; return true; }); }
+    _currentFilteredIncidents = filtered;
+    renderIncidentTable(filtered); renderMap(filtered);
+}
+
+function clearFilters(){ document.getElementById('statusFilter').value='all'; if(document.getElementById('clusterGroupFilter'))document.getElementById('clusterGroupFilter').value='all'; document.getElementById('dateFrom').value=''; document.getElementById('dateTo').value=''; currentFilters={status:'all',clusterGroup:'all',dateFrom:null,dateTo:null}; applyFilters(); }
+function getSeverityLevel(priority,reportCount,status){ if(status&&status.toUpperCase()==='RESTORED')return 'Restored'; if(priority==='CRITICAL'||reportCount>=10)return 'Severe'; if(priority==='HIGH'||reportCount>=5)return 'Moderate'; return 'Minor'; }
+
+let _lastRenderedIncidents = [];
+let _consumerFetchController = null;
+
+function filterIncidentsBySearch(query) {
+    var q = (query || '').toLowerCase().trim();
+    if (!q) {
+        renderIncidentTable(_lastRenderedIncidents);
+        return;
+    }
+    var qNorm = q.replace(/-/g, '');
+    var filtered = _lastRenderedIncidents.filter(function(inc) {
+        var refNorm = (inc.reference_id || '').replace(/-/g, '').toLowerCase();
+        return (inc.location_display || '').toLowerCase().includes(q)
+            || (inc.feeder_name      || '').toLowerCase().includes(q)
+            || (inc.barangay         || '').toLowerCase().includes(q)
+            || (inc.town             || '').toLowerCase().includes(q)
+            || (inc.job_order_id     || '').toLowerCase().includes(q)
+            || (inc.type             || '').toLowerCase().includes(q)
+            || (inc.status           || '').toLowerCase().includes(q)
+            || (inc.consumer_names   || '').toLowerCase().includes(q)
+            || (inc.reference_id     || '').toLowerCase().includes(q)
+            || refNorm.includes(qNorm)
+            || (inc.account_numbers  || '').toLowerCase().includes(q);
+    });
+    if (filtered.length === 1 && (q.startsWith('rpt') || /^\d{6,}/.test(qNorm))) {
+        _renderIncidentRows(filtered);
+        setTimeout(function() {
+            showConsumerDetails(filtered[0]);
+            if (filtered[0].lat && filtered[0].lng) {
+                map.flyTo([filtered[0].lat, filtered[0].lng], 14, {animate: true, duration: 1.0});
+            }
+        }, 120);
+        return;
+    }
+    _renderIncidentRows(filtered);
+}
+
+function renderIncidentTable(incidents) {
+    _lastRenderedIncidents = incidents || [];
+    var q = (document.getElementById('incidentSearch')?.value || '').trim();
+    if (q) {
+        filterIncidentsBySearch(q);
+        return;
+    }
+    _renderIncidentRows(_lastRenderedIncidents);
+}
+
+/* ═══════════════════════════════════════════════════
+   FIX 1 — _renderIncidentRows
+   The "Type" column (index 2) now shows a type-breakdown
+   chips panel built from inc.type_breakdown JSONB.
+   All other columns remain identical to the original.
+═══════════════════════════════════════════════════ */
+function _renderIncidentRows(incidents) {
+    var tbody = document.getElementById('incidentTableBody');
+    tbody.innerHTML = '';
+    if (!incidents || incidents.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;">'
+            + '<div class="empty-state"><div class="empty-state-icon">🔍</div>'
+            + '<div class="empty-state-text">No incidents found matching your search</div>'
+            + '</div></td></tr>';
+        return;
+    }
+
+    var currentSearch = (document.getElementById('incidentSearch')?.value || '').toLowerCase().trim();
+
+    incidents.forEach(inc => {
+        if (!inc || !inc.incident_id) return;
+        var tr = document.createElement('tr');
+        tr.dataset.incidentId = inc.incident_id;
+
+        tr.onclick = function(e) {
+            if (e.target.closest('input,button,textarea')) return;
+            showConsumerDetails(inc);
+            if (inc.lat && inc.lng) {
+                var targetZoom = viewMode === 'cluster' ? 13 : viewMode === 'consumer' ? 16 : 14;
+                map.flyTo([inc.lat, inc.lng], targetZoom, {animate: true, duration: 0.6});
+            }
+        };
+
+        var severity   = getSeverityLevel(inc.priority, inc.report_count, inc.status);
+        var statusClass = (inc.status || '').toLowerCase();
+
+        var feederHtml = inc.feeder_name
+            ? '<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;'
+              + 'background:' + (inc.feeder_is_active ? '#fff7ed' : '#eff6ff') + ';'
+              + 'color:'      + (inc.feeder_is_active ? '#c2410c' : '#1e40af') + ';'
+              + 'border:1px solid ' + (inc.feeder_is_active ? '#fed7aa' : '#bfdbfe') + ';'
+              + 'border-radius:12px;font-size:11px;font-weight:700;white-space:nowrap;">'
+              + (inc.feeder_is_active ? '🔴' : '⚡') + ' ' + esc(inc.feeder_name) + '</span>'
+            : '<span style="color:#9ca3af;font-size:12px;">—</span>';
+
+        // ── CLUSTER GROUP BADGE ───────────────────────────
+        var clusterGroupBadgeHtml = buildClusterGroupBadge(inc);
+        var categoryBadgeHtml = buildCategoryBadge(inc);
+        // ── TIME DISPLAY ─────────────────────────────────
+        var OUTAGE_INCIDENT_TYPES = ['power_outage', 'sdi_problem', 'voltage_issue', 'partial_outage', 'streetlight'];
+        var HAZARD_TYPES = ['fallen_wire', 'leaning_pole', 'tree_branch', 'transformer_issue',
+                            'fire_hazard', 'sparking', 'equipment_damage', 'other'];
+        var isOutageType = OUTAGE_INCIDENT_TYPES.includes(inc.type || '');
+        var isHazardType = HAZARD_TYPES.includes(inc.type || '');
+        var formattedTime = 'N/A', timeLabel = 'Reported';
+
+        if (isHazardType) {
+            formattedTime = inc.first_report_time ? formatDateTime(inc.first_report_time) : 'N/A';
+            timeLabel = 'Incident Reported';
+        } else if (inc.incident_time && inc.earliest_report_timestamp && isOutageType) {
+            try {
+                var d = new Date(inc.earliest_report_timestamp);
+                var parts = inc.incident_time.split(':');
+                d.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0, 0, 0);
+                if (d.getTime() > Date.now()) d = new Date(inc.earliest_report_timestamp);
+                formattedTime = d.toLocaleString('en-PH', {timeZone:'Asia/Manila',year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
+                timeLabel = 'Outage Started';
+            } catch(e) {
+                formattedTime = formatDateTime(inc.earliest_report_timestamp);
+                timeLabel = 'Form Submitted';
+            }
+        } else if (inc.first_report_time) {
+            formattedTime = formatDateTime(inc.first_report_time);
+            timeLabel = isOutageType ? 'Form Submitted' : 'Incident Reported';
+        }
+
+        // ── CONSUMER NAMES BADGE ─────────────────────────
+        var consumerBadge = '';
+        if (inc.consumer_names) {
+            var namesHighlighted = esc(inc.consumer_names);
+            if (currentSearch && (inc.consumer_names || '').toLowerCase().includes(currentSearch)) {
+                var regex = new RegExp('(' + currentSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+                namesHighlighted = esc(inc.consumer_names).replace(regex,
+                    '<mark style="background:#fef08a;color:#713f12;border-radius:3px;padding:0 2px;">$1</mark>');
+            }
+            consumerBadge = '<div style="margin-top:5px;padding:3px 8px;background:#f0fdf4;'
+                + 'border:1px solid #bbf7d0;border-radius:6px;font-size:11px;color:#166534;'
+                + 'display:inline-block;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"'
+                + 'title="' + esc(inc.consumer_names) + '">'
+                + '👤 ' + namesHighlighted + '</div>';
+        }
+
+        // ── RPT REFERENCE BADGE ──────────────────────────
+        var refBadge = '';
+        if (inc.reference_id) {
+            refBadge = '<div style="margin-top:4px;">'
+                + '<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;'
+                + 'background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;border-radius:7px;'
+                + 'font-size:10px;font-weight:700;font-family:monospace;cursor:pointer;"'
+                + ' onclick="event.stopPropagation();_openConsumerByRef(\'' + esc(inc.reference_id) + '\',' + inc.incident_id + ');"'
+                + ' title="Click to open consumer with this reference ID">'
+                + '📋 ' + esc(inc.reference_id) + '</span></div>';
+        }
+
+        var remarksVal  = (inc.remarks || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        var remarksHtml = '<textarea id="remarks_' + inc.incident_id + '" class="remarks-textarea"'
+    + ' rows="1" placeholder="✏️ Type remarks… (auto-saves on blur)"'
+    + ' oninput="autoResizeRemarks(this)"'
+    + ' onblur="updateIncidentRemarks(' + inc.incident_id + ', this.value)"'
+    + ' onclick="event.stopPropagation()" onfocus="event.stopPropagation()">'
+    + remarksVal + '</textarea>';
+
+       var actions = buildIncidentActionMenu(inc);
+
+        // ── FIX 1: TYPE BREAKDOWN CHIPS ──────────────────
+        // Uses inc.type_breakdown (JSONB from backend) to build
+        // one colored chip per sub-incident type with count badge.
+        var typeChipsHtml = buildTypeChips(inc.type_breakdown, inc.type);
+
+        tr.innerHTML =
+            // Col 0: Location
+            '<td>'
+            + '<strong>' + esc(inc.location_display || '') + '</strong>'
+            + refBadge
+            + consumerBadge
+            + '<br><small style="color:#6b7280;">' + timeLabel + ': ' + formattedTime + '</small>'
+            + '</td>'
+            // Col 1: Feeder
+            // Col 1: Feeder
+// Col 1: Feeder
+            + '<td>' + feederHtml + '</td>'
+            // Col 2: Category badge + Cluster Group badge
++ '<td><div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start;">'
+    + categoryBadgeHtml
+    + clusterGroupBadgeHtml
+  + '</div></td>'
+// Col 3: Sub-Incident Types
++ '<td>' + typeChipsHtml + '</td>'
+            // Col 3: Affected
+            + '<td><strong>' + (inc.report_count || 0) + '</strong></td>'
+            // Col 4: Severity
+            + '<td><span class="severity-badge ' + severity.toLowerCase() + '">' + severity + '</span></td>'
+            // Col 5: Status
+            + '<td><span class="status-badge ' + statusClass + '">' + (inc.status || 'N/A') + '</span></td>'
+            // Col 6: Assigned Time
+            + '<td>' + (inc.assigned_at && inc.assigned_at !== 'None'
+                ? '<div><strong style="color:#f59e0b;">' + formatDateTime(inc.assigned_at) + '</strong>'
+                  + (inc.assigned_by ? '<br><small style="color:#92400e;">👤 by <strong>' + esc(inc.assigned_by) + '</strong></small>' : '') + '</div>'
+                : '<span style="color:#9ca3af;font-size:12px;">Not assigned</span>') + '</td>'
+            // Col 7: Restored Time
+            + '<td>' + (inc.restored_at && inc.restored_at !== 'None'
+                ? '<div><strong style="color:#10b981;">' + formatDateTime(inc.restored_at) + '</strong>'
+                  + (inc.restored_by ? '<br><small style="color:#065f46;">👤 by <strong>' + esc(inc.restored_by) + '</strong></small>' : '') + '</div>'
+                : '<span style="color:#9ca3af;font-size:12px;">Not restored</span>') + '</td>'
+            // Col 8: Remarks
+            + '<td>' + remarksHtml + '</td>'
+            // Col 9: Actions
+       
+            + '<td style="text-align:center;">' + actions + '</td>';
+
+       tbody.appendChild(tr);
+        var ta = document.getElementById('remarks_' + inc.incident_id);
+        if (ta) {
+    ta.dataset.originalValue = inc.remarks || '';
+    autoResizeRemarks(ta);
+}
+    });
+}
+
+const CATEGORY_META = {
+    PI: { label:'Power Interruption', icon:'⚡' },
+    SE: { label:'Safety Emergency',   icon:'🚨' },
+    PQ: { label:'Power Quality',      icon:'📊' },
+    AI: { label:'Asset Integrity',    icon:'🔧' },
+    PL: { label:'Public Lighting',    icon:'💡' },
+};
+
+const CATEGORY_TO_CLUSTER_GROUP = {
+    PI: 'POWER', PQ: 'POWER',
+    SE: 'SAFETY',
+    AI: 'ASSET',
+    PL: 'LIGHT',
+};
+
+const CLUSTER_GROUP_META = {
+    POWER:  { label:'POWER OUTAGE CLUSTER',     icon:'⚡', color:'#1e40af', bg:'#eff6ff', border:'#bfdbfe' },
+    SAFETY: { label:'SAFETY EMERGENCY CLUSTER',  icon:'🚨', color:'#991b1b', bg:'#fee2e2', border:'#fecaca' },
+    ASSET:  { label:'ASSET MAINTENANCE CLUSTER', icon:'🔧', color:'#92400e', bg:'#fff7ed', border:'#fed7aa' },
+    LIGHT:  { label:'STREETLIGHT CLUSTER',       icon:'💡', color:'#15803d', bg:'#f0fdf4', border:'#bbf7d0' },
+};
+
+const TYPE_TO_CLUSTER_GROUP = {
+    power_outage:      'POWER',
+    partial_outage:    'POWER',
+    sdi_problem:       'POWER',
+    voltage_issue:     'POWER',
+
+    fallen_wire:       'SAFETY',
+    transformer_issue: 'SAFETY',
+    fire_hazard:       'SAFETY',
+    sparking:          'SAFETY',
+    tree_branch:       'SAFETY',
+    vehicular_accident:'SAFETY',
+    other:             'SAFETY',
+
+    leaning_pole:      'ASSET',
+    equipment_damage:  'ASSET',
+    vegetation_clearing:'ASSET',
+
+    streetlight:       'LIGHT',
+};
+
+function getClusterGroup(inc) {
+    // 1. Prefer explicit incident_type mapping (most reliable)
+    const byType = TYPE_TO_CLUSTER_GROUP[inc.type];
+    if (byType) return byType;
+
+    // 2. Fall back to incident_category if type is unrecognized
+    const cat = inc.incident_category;
+    if (cat && CATEGORY_TO_CLUSTER_GROUP[cat]) return CATEGORY_TO_CLUSTER_GROUP[cat];
+
+    // 3. Last resort default
+    return 'SAFETY';
+}
+
+function buildClusterGroupBadge(inc) {
+    const grp  = getClusterGroup(inc);
+    const meta = CLUSTER_GROUP_META[grp];
+    return `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;
+        border-radius:14px;font-size:11px;font-weight:800;text-transform:uppercase;
+        letter-spacing:.3px;white-space:nowrap;
+        background:${meta.bg};color:${meta.color};border:1px solid ${meta.border};">
+        ${meta.icon} ${esc(meta.label)}
+    </span>`;
+}
+
+function buildCategoryBadge(inc) {
+    const cat   = inc.incident_category || 'PI';
+    const pcode = inc.priority_code     || 'P3';
+    const meta  = CATEGORY_META[cat] || CATEGORY_META['PI'];
+    return `<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start;">
+        <span class="cat-badge ${esc(cat)}" title="${esc(meta.label)}">
+            ${meta.icon} ${esc(cat)}
+        </span>
+        <span class="pcode-badge ${esc(pcode)}">${esc(pcode)}</span>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════
+   _openConsumerByRef — unchanged from original
+═══════════════════════════════════════════════════ */
+async function _openConsumerByRef(refId, incidentId) {
+    var inc = currentIncidents.find(function(i) { return i.incident_id === incidentId; });
+    if (!inc) { showNotification('Incident not found in current data', 'error'); return; }
+    await showConsumerDetails(inc);
+    setTimeout(function() {
+        var rows = document.querySelectorAll('#consumerTableBody tr');
+        var found = false;
+        rows.forEach(function(row) {
+            var cellText = row.innerText || row.textContent || '';
+            if (cellText.includes(refId)) {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                row.style.transition = 'background 0.3s';
+                row.style.background = '#fef9c3';
+                setTimeout(function() { row.style.background = ''; }, 2500);
+                found = true;
+            }
+        });
+        if (!found) showNotification('Reference ID ' + refId + ' found — consumer panel opened', 'info');
+    }, 600);
+    if (inc.lat && inc.lng) map.flyTo([inc.lat, inc.lng], 14, { animate: true, duration: 1.0 });
+}
+
+async function showConsumerDetails(incident){
+    if(!incident||!incident.incident_id){showNotification('Invalid incident data','error');return;}
+    selectedIncident=incident;
+    singleMarkerMode=false;              // ← ADD: opening an incident's consumer list exits isolation mode
+    document.getElementById('clusterTitle').textContent=incident.location_display||'Unknown';
+    document.getElementById('clusterAffected').textContent=incident.report_count||0;
+    document.getElementById('clusterSeverity').textContent=getSeverityLevel(incident.priority,incident.report_count,incident.status);
+    document.getElementById('clusterViewMode').classList.remove('active');
+    document.getElementById('consumerViewMode').classList.add('active');
+    if(incident.lat&&incident.lng)map.setView([incident.lat,incident.lng],15);
+
+    var tbody=document.getElementById('consumerTableBody');
+    tbody.innerHTML='<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-text">Loading consumer details…</div></div></td></tr>';
+
+    // Cancel any still-pending fetch from a previously clicked incident
+    if (_consumerFetchController) _consumerFetchController.abort();
+    _consumerFetchController = new AbortController();
+    var thisIncidentId = incident.incident_id;
+
+    try{
+        var res=await fetch('/api/incident/'+incident.incident_id,{credentials:'same-origin', signal:_consumerFetchController.signal});
+        var data=await res.json();
+        if (selectedIncident?.incident_id !== thisIncidentId) return; // stale response, user clicked elsewhere
+        allConsumers=data.success?data.data.reports||[]:[];
+    }catch(_){
+        if (selectedIncident?.incident_id !== thisIncidentId) return;
+        allConsumers=[];
+    }
+    renderConsumerTable(allConsumers);
+}
+
+/* ═══════════════════════════════════════════════════
+   FIX 2 + FIX 3 — renderConsumerTable
+   Each row now has:
+     • A severity badge (FIX 2) based on individual incident_type / priority
+     • Photo thumbnails strip (FIX 3) directly in the consumer name cell
+   A new "Severity" column is inserted between Account# and Reported Time.
+═══════════════════════════════════════════════════ */
+function renderConsumerTable(consumers){
+    var tbody=document.getElementById('consumerTableBody');
+    tbody.innerHTML='';
+    if(!consumers||consumers.length===0){
+        tbody.innerHTML='<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">👤</div><div class="empty-state-text">No consumer data</div></div></td></tr>';
+        return;
+    }
+    consumers.forEach(c=>{
+        var tr=document.createElement('tr');
+        tr.onclick=()=>{
+    showConsumerDetailsModal(c);
+    if(c.lat!=null && c.lng!=null){
+        showOnlyConsumerMarker(c);
+    } else if(selectedIncident?.lat && selectedIncident?.lng){
+        map.flyTo([selectedIncident.lat, selectedIncident.lng], 15);
+    }
+};
+
+        var st=c.status||'NEW', sc=st.toLowerCase().replace('_','');
+        var phFmt=opts=>new Intl.DateTimeFormat('en-US',{...opts,timeZone:'Asia/Manila'}).format;
+        var full={year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true};
+        var fmtDate=(iso)=>{try{return iso?phFmt(full)(new Date(iso)):'—';}catch(_){return '—';}};
+
+        var btns = buildConsumerActionMenu(c);
+        
+
+
+        // ── REPORTED TIME (PH timezone-safe) ─────────────
+        var OUTAGE_TYPES_CONS = ['power_outage', 'sdi_problem', 'voltage_issue', 'partial_outage', 'streetlight'];
+        var isOutageTypeCons  = OUTAGE_TYPES_CONS.includes(c.incident_type || '');
+        var reportedTime = 'N/A';
+        var timeLabel    = isOutageTypeCons ? 'Outage Started' : 'Incident Reported';
+
+        if(c.incident_time && c.timestamp && isOutageTypeCons){
+            try {
+                var d = new Date(c.timestamp);
+                var parts = c.incident_time.split(':');
+                d.setHours(parseInt(parts[0])||0, parseInt(parts[1])||0, 0, 0);
+                if(d.getTime() > Date.now()) d = new Date(c.timestamp);
+                reportedTime = fmtDate(d.toISOString());
+            } catch(e) { reportedTime = fmtDate(c.timestamp); }
+        } else if(c.timestamp){
+            reportedTime = fmtDate(c.timestamp);
+        }
+
+        // ── FIX 2: per-consumer severity badge ───────────
+        var sevBadgeHtml = buildConsumerSevBadge(c.incident_type, c.priority);
+
+        // ── FIX 3: photo thumbnail strip ─────────────────
+        var photoUrls = [];
+        if (c.photo_urls) {
+            try {
+                photoUrls = Array.isArray(c.photo_urls) ? c.photo_urls : JSON.parse(c.photo_urls);
+            } catch(e) { photoUrls = []; }
+        }
+        var thumbStripHtml = buildPhotoThumbStrip(photoUrls);
+
+        tr.innerHTML =
+            // Col 0: Account # + Reference ID
+            '<td>'
+            + esc(c.account_number || 'N/A')
+            + (c.reference_id
+                ? '<br><span style="display:inline-flex;align-items:center;gap:3px;margin-top:4px;padding:2px 7px;'
+                + 'background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;border-radius:7px;'
+                + 'font-size:10px;font-weight:700;font-family:monospace;letter-spacing:.3px;">📋 '
+                + esc(c.reference_id) + '</span>'
+                : '')
+            + '</td>'
+
+            // Col 1: Consumer Name + Contact + Address + FIX 3 photo strip
+            + '<td>'
+            + '<strong>' + esc(c.full_name || 'N/A') + '</strong>'
+            + '<br><small style="color:#6b7280;">' + esc(c.contact_number || '') + '</small>'
+            + '<br><small style="color:#6b7280;">' + esc(c.address || '') + '</small>'
+            + thumbStripHtml   // ← FIX 3: thumbnails directly in row
+            + '</td>'
+
+            // Col 2: FIX 2 — per-consumer severity badge
+            + '<td>' + sevBadgeHtml + '</td>'
+
+            // Col 3: Reported Time
+            + '<td>'
+            + '<strong style="color:#dc2626;font-size:14px;">' + reportedTime + '</strong>'
+            + '<br><small style="color:#6b7280;font-size:11px;">' + timeLabel + '</small>'
+            + '<br><small style="color:#9ca3af;font-size:11px;" class="ago-ticker" data-ts="' + esc(c.timestamp || '') + '">(' + timeAgo(c.timestamp) + ')</small>'
+            + '</td>'
+
+            // Col 4: Status
+            + '<td><span class="status-badge ' + sc + '">' + st + '</span></td>'
+
+            // Col 5: Assigned Time
+            + '<td>'
+            + (c.assigned_at && c.assigned_at !== 'None'
+                ? '<strong style="color:#f59e0b;">' + fmtDate(c.assigned_at) + '</strong>'
+                : '<span style="color:#9ca3af;">Not assigned</span>')
+            + '</td>'
+
+            // Col 6: Restored Time
+            + '<td>'
+            + (c.restored_at && c.restored_at !== 'None'
+                ? '<strong style="color:#10b981;">' + fmtDate(c.restored_at) + '</strong>'
+                : '<span style="color:#9ca3af;">Not restored</span>')
+            + '</td>'
+
+            // Col 7: Actions
+            // Col 7: Actions
+            + '<td style="text-align:center;">' + btns + '</td>';
+
+        tbody.appendChild(tr);
+    });
+}
+
+function showClusterView(){
+    document.getElementById('consumerViewMode').classList.remove('active');
+    document.getElementById('clusterViewMode').classList.add('active');
+    selectedIncident=null;
+    singleMarkerMode=false;              // ← ADD
+    map.setView([10.7115, 122.4240], 11);
+    applyFilters();                      // ← ADD: repaint the normal cluster/individual view
+}
+
+document.getElementById('consumerSearch')?.addEventListener('input', function(e) {
+    var q = e.target.value.toLowerCase().trim();
+    renderConsumerTable(q ? allConsumers.filter(function(c) {
+        return (c.full_name      || '').toLowerCase().includes(q)
+            || (c.account_number || '').toLowerCase().includes(q)
+            || (c.address        || '').toLowerCase().includes(q)
+            || (c.reference_id   || '').toLowerCase().includes(q);
+    }) : allConsumers);
+});
+
+/* ═══════════════════════════════════════════════════
+   CSV EXPORT — respects whatever filters/search are
+   currently applied, since it reads the already-
+   filtered in-memory arrays instead of re-querying.
+═══════════════════════════════════════════════════ */
+function _csvEscape(v) {
+    if (v === null || v === undefined) return '';
+    var s = String(v).replace(/"/g, '""');
+    return /[",\n]/.test(s) ? '"' + s + '"' : s;
+}
+function _downloadCSV(rows, filename) {
+    var csv = rows.map(r => r.map(_csvEscape).join(',')).join('\r\n');
+    var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+}
+
+function exportIncidentsCSV() {
+    var data = _lastRenderedIncidents && _lastRenderedIncidents.length
+        ? _lastRenderedIncidents
+        : _currentFilteredIncidents;
+    if (!data || !data.length) { showNotification('No incidents to export', 'info'); return; }
+
+    var header = ['Incident ID','Reference ID','Location','Barangay','Town','Feeder',
+        'Category','Priority Code','Sub-Types','Affected Reports','Severity','Status',
+        'Assigned At','Assigned By','Restored At','Restored By','Remarks',
+        'Consumer Names','Account Numbers','First Report Time','Latitude','Longitude'];
+
+    var rows = data.map(inc => [
+        inc.incident_id, inc.reference_id || '', inc.location_display || '',
+        inc.barangay || '', inc.town || '', inc.feeder_name || '',
+        inc.incident_category || '', inc.priority_code || '',
+        inc.type || '', inc.report_count || 0,
+        getSeverityLevel(inc.priority, inc.report_count, inc.status),
+        inc.status || '', formatDateTime(inc.assigned_at), inc.assigned_by || '',
+        formatDateTime(inc.restored_at), inc.restored_by || '', inc.remarks || '',
+        inc.consumer_names || '', inc.account_numbers || '',
+        formatDateTime(inc.first_report_time), inc.lat || '', inc.lng || ''
+    ]);
+
+    var ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    _downloadCSV([header, ...rows], `ileco1_incidents_${ts}.csv`);
+}
+
+function exportConsumersCSV() {
+    var q = (document.getElementById('consumerSearch')?.value || '').toLowerCase().trim();
+    var data = q
+        ? allConsumers.filter(c =>
+            (c.full_name||'').toLowerCase().includes(q) ||
+            (c.account_number||'').toLowerCase().includes(q) ||
+            (c.address||'').toLowerCase().includes(q) ||
+            (c.reference_id||'').toLowerCase().includes(q))
+        : allConsumers;
+    if (!data || !data.length) { showNotification('No consumer records to export', 'info'); return; }
+
+    var header = ['Report ID','Reference ID','Account Number','Full Name','Contact Number',
+        'Address','Barangay','Town','Landmark','Incident Type','Priority','Status',
+        'Reported At','Assigned At','Restored At','Details','Latitude','Longitude'];
+
+    var rows = data.map(c => [
+        c.report_id, c.reference_id || '', c.account_number || '', c.full_name || '',
+        c.contact_number || '', c.address || '', c.barangay || '', c.town || '',
+        c.landmark || '', c.incident_type || '', c.priority || '', c.status || '',
+        formatDateTime(c.timestamp), formatDateTime(c.assigned_at), formatDateTime(c.restored_at),
+        c.details || '', c.lat || '', c.lng || ''
+    ]);
+
+    var incLabel = (selectedIncident?.location_display || 'consumers').replace(/[^a-z0-9]/gi,'_');
+    var ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    _downloadCSV([header, ...rows], `ileco1_${incLabel}_${ts}.csv`);
+}
+
+
+function renderMap(filteredIncidents){
+    if (singleMarkerMode) return; // ← ADD: preserve the isolated single-consumer marker
+    incidentMarkers.clearLayers(); consumerMarkers.clearLayers();
+    var zoom=map.getZoom(), ind=document.getElementById('zoomIndicator');
+    var showClusters=viewMode==='cluster'||(viewMode==='auto'&&zoom<14);
+    var showConsumers=viewMode==='consumer'||(viewMode==='auto'&&zoom>=14);
+    var incs=filteredIncidents!==undefined?filteredIncidents:currentIncidents;
+    if(showClusters){
+        ind.innerHTML='<div style="font-size:13px;font-weight:700;color:#1e40af;">Zoom: '+zoom+' | 📊 Cluster</div><div style="font-size:10px;color:#6b7280;">Zoom in for individual</div>';
+        incs.forEach(inc=>{
+            if(inc.lat==null||inc.lng==null)return;
+            var sev=getSeverityLevel(inc.priority,inc.report_count,inc.status), cls=sev.toLowerCase();
+            var size=Math.min(32+Math.sqrt(inc.report_count||1)*8,120), fs=Math.max(13,Math.round(size/3.2));
+            var icon=L.divIcon({html:'<div class="incident-cluster '+cls+'" style="width:'+size+'px;height:'+size+'px;font-size:'+fs+'px;line-height:'+size+'px;">'+(inc.report_count||0)+'</div>',className:'no-default',iconSize:[size,size],iconAnchor:[size/2,size/2]});
+            var m=L.marker([inc.lat,inc.lng],{icon,draggable:true}).bindPopup(createIncidentPopup(inc), {maxWidth:320, autoPan:true, autoPanPadding:[40,40]});
+            m.on('click',()=>showConsumerDetails(inc));
+            m.on('dragend', function(ev){ var ll=ev.target.getLatLng(); saveIncidentPosition(inc.incident_id, ll.lat, ll.lng); });
+            incidentMarkers.addLayer(m);
+        });
+        if(!map.hasLayer(incidentMarkers))map.addLayer(incidentMarkers);
+        if(map.hasLayer(consumerMarkers))map.removeLayer(consumerMarkers);
+    }else if(showConsumers){
+        ind.innerHTML='<div style="font-size:13px;font-weight:700;color:#1e40af;">Zoom: '+zoom+' | 👥 Individual</div><div style="font-size:10px;color:#6b7280;">Zoom out for clusters</div>';
+        var statusF=currentFilters.status, reports=currentConsumerReports;
+        if(statusF&&statusF.toUpperCase()!=='ALL')reports=reports.filter(r=>r.status===statusF.toUpperCase());
+        reports.forEach(r=>{
+            if(r.lat==null||r.lng==null)return;
+            var cls=r.status==='RESTORED'?'restored':r.priority==='CRITICAL'?'severe':r.priority==='HIGH'?'moderate':'minor';
+            var icon=L.divIcon({html:'<div class="consumer-marker '+cls+'"></div>',className:'no-default',iconSize:[14,14],iconAnchor:[7,7]});
+            var marker=L.marker([r.lat,r.lng],{icon,draggable:true})
+                .bindPopup(createConsumerPopup(r), {maxWidth:300, autoPan:true, autoPanPadding:[40,40]});
+
+            marker.on('dragend', function(ev){
+                var ll=ev.target.getLatLng();
+                saveReportPosition(r.report_id||r.id, ll.lat, ll.lng);
+            });
+            marker.on('click', function(){ showConsumerDetailsModal(_normalizeMapReportForModal(r)); });
+
+            consumerMarkers.addLayer(marker);
+        });
+        if(!map.hasLayer(consumerMarkers))map.addLayer(consumerMarkers);
+        if(map.hasLayer(incidentMarkers))map.removeLayer(incidentMarkers);
+    }
+}
+
+function createIncidentPopup(inc){
+    var sev=getSeverityLevel(inc.priority,inc.report_count,inc.status);
+    var clusterGroupBadgeHtml = buildClusterGroupBadge(inc);
+    var hdrBg=inc.status==='RESTORED'?'#3b82f6':inc.priority==='CRITICAL'||inc.report_count>=10?'#dc2626':inc.priority==='HIGH'?'#f59e0b':'#10b981';
+    var timeStr='N/A';
+    if(inc.incident_time&&inc.earliest_report_timestamp){var d=new Date(inc.earliest_report_timestamp);var [h,m]=inc.incident_time.split(':');d.setHours(parseInt(h),parseInt(m),0,0);timeStr=formatDateTime(d.toISOString());}else if(inc.first_report_time)timeStr=formatDateTime(inc.first_report_time);
+    var feederLine=inc.feeder_name?'<div class="popup-field"><strong>⚡ Feeder:</strong> <span style="color:'+(inc.feeder_is_active?'#c2410c':'#1e40af')+';font-weight:600;">'+esc(inc.feeder_name)+(inc.feeder_is_active?' 🔴':'')+'</span></div>':'';
+    var refLine = inc.reference_id
+        ? '<div class="popup-field"><strong>📋 Ref ID:</strong> <span style="font-family:monospace;font-weight:700;color:#1e40af;font-size:12px;">'+esc(inc.reference_id)+'</span></div>'
+        : '';
+    // Type chips in popup
+    var chipsHtml = buildTypeChips(inc.type_breakdown, inc.type);
+    var btns=inc.status!=='RESTORED'?'<div style="display:flex;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid #f3f4f6;">'+(inc.status==='NEW'?'<button onclick="assignIncidentFromTable('+inc.incident_id+')" style="flex:1;padding:7px 0;background:#f59e0b;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">📋 Assign</button>':'')+'<button onclick="restoredIncidentFromTable('+inc.incident_id+')" style="flex:1;padding:7px 0;background:#10b981;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">✓ Restored</button><button onclick="showConsumerDetails(currentIncidents.find(function(i){return i.incident_id==='+inc.incident_id+';}));" style="flex:1;padding:7px 0;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">👁️ View</button></div>':'<div style="margin-top:10px;padding:8px;background:#dbeafe;border-radius:6px;text-align:center;font-size:12px;font-weight:700;color:#1e40af;">✅ Power Restored</div>';
+    return '<div class="incident-popup" style="min-width:270px;"><div class="popup-header" style="background:'+hdrBg+';">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        + '<span>'+esc(inc.location_display||'Unknown')+'</span>'
+        + '<span style="background:rgba(255,255,255,.2);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">'+sev.toUpperCase()+'</span></div>'
+        + '<div style="font-size:11px;opacity:.8;margin-top:3px;">'+(inc.report_count||0)+' report'+((inc.report_count||0)!==1?'s':'')+'</div></div>'
+        + '<div style="padding:10px 0 0;">'
+        + '<div class="popup-field">'+clusterGroupBadgeHtml+'</div>'
+        + refLine + feederLine
+        + '<div class="popup-field"><strong>Status:</strong> <span class="status-badge '+( inc.status||'').toLowerCase()+'">'+( inc.status||'N/A')+'</span></div>'
+        + '<div class="popup-field"><strong>Sub-types:</strong> '+chipsHtml+'</div>'
+        + '<div class="popup-field"><strong>⏰ Reported:</strong> '+timeStr+'</div>'
+        + btns+'</div></div>';
+}
+
+/* ═══════════════════════════════════════════════════
+   SHOW ONLY ONE CONSUMER MARKER
+   Clears every other marker off the map so clicking a
+   single consumer row shows exactly one circle, not the
+   whole "smart" cluster/individual view.
+═══════════════════════════════════════════════════ */
+function showOnlyConsumerMarker(c){
+    if (c.lat == null || c.lng == null) return;
+
+    singleMarkerMode = true;
+
+    incidentMarkers.clearLayers();
+    consumerMarkers.clearLayers();
+    if (map.hasLayer(incidentMarkers)) map.removeLayer(incidentMarkers);
+    if (!map.hasLayer(consumerMarkers)) map.addLayer(consumerMarkers);
+
+    var cls = c.status === 'RESTORED' ? 'restored'
+            : c.priority === 'CRITICAL' ? 'severe'
+            : c.priority === 'HIGH' ? 'moderate' : 'minor';
+
+    var icon = L.divIcon({
+        html: '<div class="consumer-marker ' + cls + '"></div>',
+        className: 'no-default',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7]
+    });
+
+    var marker = L.marker([c.lat, c.lng], { icon, draggable: true })
+        .bindPopup(createConsumerPopup(c), { maxWidth: 300, autoPan: true, autoPanPadding: [40, 40] });
+
+    marker.on('dragend', function(ev){
+        var ll = ev.target.getLatLng();
+        saveReportPosition(c.report_id || c.id, ll.lat, ll.lng);
+    });
+
+    consumerMarkers.addLayer(marker);
+
+    map.flyTo([c.lat, c.lng], 17, { animate: true, duration: 1.2 });
+    setTimeout(function(){ marker.openPopup(); }, 1300);
+}
+
+/* ═══════════════════════════════════════════════════
+   NORMALIZE MAP-REPORT FIELDS FOR THE CONSUMER MODAL
+   /api/map_reports returns {id, customer, contact, ...}
+   but showConsumerDetailsModal expects {report_id,
+   full_name, contact_number, ...}. This bridges the gap
+   so clicking any map marker can open full details.
+═══════════════════════════════════════════════════ */
+function _normalizeMapReportForModal(r) {
+    return {
+        report_id:      r.report_id || r.id,
+        full_name:      r.full_name || r.customer,
+        contact_number: r.contact_number || r.contact,
+        email:          r.email || '',
+        account_number: r.account_number || '',
+        address:        r.address || '',
+        barangay:       r.barangay || '',
+        town:           r.town || '',
+        landmark:       r.landmark || '',
+        details:        r.details || '',
+        priority:       r.priority || '',
+        incident_type:  r.incident_type || '',
+        status:         r.status || 'NEW',
+        timestamp:      r.timestamp || null,
+        incident_time:  r.incident_time || null,
+        assigned_at:    r.assigned_at || null,
+        restored_at:    r.restored_at || null,
+        reference_id:   r.reference_id || '',
+        photo_urls:     r.photo_urls || null,
+        lat: r.lat, lng: r.lng
+    };
+}
+function createConsumerPopup(r){
+    var name     = r.full_name || r.customer || 'N/A';
+    var contact  = r.contact_number || r.contact || 'N/A';
+    var loc      = (r.barangay && r.town) ? esc(r.barangay) + ', ' + esc(r.town) : esc(r.address || '');
+    var det      = r.details ? (r.details.length > 80 ? r.details.substring(0, 80) + '…' : r.details) : 'No details';
+    var rt       = r.timestamp ? formatDateTime(r.timestamp) : 'N/A';
+    var reportId = r.report_id || r.id;
+    var status   = r.status || 'NEW';
+    var refLine  = r.reference_id
+        ? '<div class="popup-field"><strong>📋 Ref ID:</strong> '
+        +   '<span style="font-family:monospace;font-weight:700;color:#1e40af;font-size:12px;'
+        +   'background:#dbeafe;padding:2px 7px;border-radius:6px;border:1px solid #bfdbfe;">'
+        +   esc(r.reference_id) + '</span></div>'
+        : '';
+
+    var btns;
+    if (status === 'RESTORED') {
+        btns = '<div style="margin-top:10px;padding:8px;background:#dbeafe;border-radius:6px;'
+             + 'text-align:center;font-size:12px;font-weight:700;color:#1e40af;">✅ Restored</div>';
+    } else {
+        btns = '<div style="display:flex;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid #f3f4f6;">'
+             + (status === 'NEW'
+                 ? '<button onclick="assignConsumer(' + reportId + ')" style="flex:1;padding:7px 0;background:#f59e0b;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">📋 Assign</button>'
+                 : '')
+             + '<button onclick="restoredConsumer(' + reportId + ')" style="flex:1;padding:7px 0;background:#10b981;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">✓ Restored</button>'
+             + '<button onclick="showConsumerDetailsModal(_normalizeMapReportForModal(currentConsumerReports.find(function(x){return (x.report_id||x.id)===' + reportId + ';})))" style="flex:1;padding:7px 0;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">👁️ View</button>'
+             + '</div>';
+    }
+
+    return '<div class="incident-popup">'
+        + '<div class="popup-header">Report #' + reportId + '</div>'
+        + refLine
+        + '<div class="popup-field"><strong>Name:</strong> '     + esc(name)    + '</div>'
+        + '<div class="popup-field"><strong>Location:</strong> ' + loc          + '</div>'
+        + '<div class="popup-field"><strong>Contact:</strong> '  + esc(contact) + '</div>'
+        + '<div class="popup-field"><strong>Details:</strong> '  + esc(det)     + '</div>'
+        + '<div class="popup-field"><strong>Reported:</strong> ' + rt           + '</div>'
+        + btns
+        + '</div>';
+}
+
+map.on('zoomend',()=>{ if(viewMode==='auto')renderMap(_currentFilteredIncidents); });
+
+/* ═══════════════════════════════════════════════════
+   DRAGGABLE POPUPS
+   Leaflet popups aren't draggable by default. This binds
+   a generic drag handler to whichever popup is currently
+   open, for both cluster and individual (consumer) views.
+═══════════════════════════════════════════════════ */
+(function enablePopupDragging(){
+    let _dragState = null;
+
+    map.on('popupopen', function(e){
+        var popupEl = e.popup._container;
+        if (!popupEl) return;
+        var wrapper = popupEl.querySelector('.leaflet-popup-content-wrapper');
+        if (!wrapper) return;
+
+        wrapper.style.cursor = 'grab';
+
+        function onPointerDown(ev){
+            // Ignore drags starting on interactive elements (buttons, links, inputs)
+            if (ev.target.closest('button,a,input,textarea,select')) return;
+            ev.stopPropagation();
+            ev.preventDefault();
+
+            var startX = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+            var startY = (ev.touches ? ev.touches[0].clientY : ev.clientY);
+            var latlng = e.popup.getLatLng();
+            var startPoint = map.latLngToContainerPoint(latlng);
+
+            wrapper.style.cursor = 'grabbing';
+            map.dragging.disable(); // prevent the map itself from panning mid-drag
+
+            _dragState = { popup: e.popup, startX, startY, startPoint };
+
+            document.addEventListener('mousemove', onPointerMove);
+            document.addEventListener('mouseup', onPointerUp);
+            document.addEventListener('touchmove', onPointerMove, {passive:false});
+            document.addEventListener('touchend', onPointerUp);
+        }
+
+        function onPointerMove(ev){
+            if (!_dragState) return;
+            ev.preventDefault();
+            var x = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+            var y = (ev.touches ? ev.touches[0].clientY : ev.clientY);
+            var dx = x - _dragState.startX;
+            var dy = y - _dragState.startY;
+            var newPoint = L.point(_dragState.startPoint.x + dx, _dragState.startPoint.y + dy);
+            var newLatLng = map.containerPointToLatLng(newPoint);
+            _dragState.popup.setLatLng(newLatLng);
+        }
+
+        function onPointerUp(){
+            if (!_dragState) return;
+            wrapper.style.cursor = 'grab';
+            map.dragging.enable();
+            _dragState = null;
+            document.removeEventListener('mousemove', onPointerMove);
+            document.removeEventListener('mouseup', onPointerUp);
+            document.removeEventListener('touchmove', onPointerMove);
+            document.removeEventListener('touchend', onPointerUp);
+        }
+
+        wrapper.addEventListener('mousedown', onPointerDown);
+        wrapper.addEventListener('touchstart', onPointerDown, {passive:false});
+    });
+})();
+
+function toggleMapView(mode){
+    singleMarkerMode=false;              // ← ADD
+    viewMode=mode;
+    ['clusterViewBtn','consumerViewBtn','smartViewBtn'].forEach(id=>document.getElementById(id)?.classList.remove('active'));
+    if(mode==='cluster')document.getElementById('clusterViewBtn')?.classList.add('active');
+    else if(mode==='consumer')document.getElementById('consumerViewBtn')?.classList.add('active');
+    else document.getElementById('smartViewBtn')?.classList.add('active');
+    applyFilters();
+}
+async function assignIncidentFromTable(id){ if(!confirm('Assign this incident to a crew?'))return; await updateIncidentStatus(id,'ASSIGNED'); }
+async function restoredIncidentFromTable(id){ if(!confirm('Mark this entire incident as RESTORED?'))return; await updateIncidentStatus(id,'RESTORED'); }
+async function updateIncidentStatus(id,status){ try{ var res=await fetch('/api/update_incident_status/'+id,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({status})}); var data=await res.json(); if(data.success){showNotification('Incident '+status+' ✓','success');await refreshData();}else showNotification(data.error||'Failed','error'); }catch(_){showNotification('Network error','error');} }
+
+async function assignConsumer(reportId){
+    if(!confirm('Assign this consumer report to a crew?'))return;
+    try{
+        var res=await fetch('/api/update_report_status/'+reportId,{
+            method:'POST', headers:{'Content-Type':'application/json'},
+            credentials:'same-origin', body:JSON.stringify({status:'ASSIGNED'})
+        });
+        var data=await res.json();
+        if(data.success){
+            showNotification('Consumer ASSIGNED ✓','success');
+            if(selectedIncident) await showConsumerDetails(selectedIncident);
+            await refreshData();
+        } else showNotification(data.error||'Failed','error');
+    }catch(_){ showNotification('Network error','error'); }
+}
+
+function _ommsPopulateModal(consumer,incident){
+    var modal=document.getElementById('ommsAssignModal'); modal.dataset.reportId=consumer.report_id; modal.dataset.incidentId=incident.incident_id;
+    var pick=(...vs)=>vs.find(v=>v&&String(v).trim())||'—';
+    var town=pick(consumer.town,incident.town), brgy=pick(consumer.barangay,incident.barangay), it=pick(incident.type,incident.incident_type,consumer.incident_type,'power_outage');
+    document.getElementById('ommsPreview_name').textContent=pick(consumer.full_name);
+    document.getElementById('ommsPreview_location').textContent=brgy+', '+town;
+    document.getElementById('ommsPreview_feeder').textContent=pick(incident.feeder_name,'— no feeder');
+    document.getElementById('ommsPreview_substation').textContent=_ommsSubstation(incident.feeder_name||'',town);
+    document.getElementById('ommsPreview_section').textContent=_ommsSection(it);
+    document.getElementById('ommsPreview_cause').textContent=_ommsCause(it,consumer.details||'');
+    document.getElementById('ommsPreview_equip').textContent=_ommsEquip(it,consumer.details||'');
+    document.getElementById('ommsPreview_priority').textContent=_ommsPriorityType(pick(incident.priority,consumer.priority,'HIGH'));
+    document.getElementById('ommsPreview_phone').textContent=pick(consumer.contact_number);
+    document.getElementById('ommsPreview_landmark').textContent=pick(consumer.landmark);
+    var det=consumer.details||''; document.getElementById('ommsPreview_notes').textContent=det.length>150?det.substring(0,150)+'…':(det||'—');
+    var btn=document.getElementById('ommsSubmitBtn'); btn.disabled=false; btn.textContent='📋 Confirm & Send to OMMS';
+}
+
+async function submitOmmsAssign(){
+    var modal=document.getElementById('ommsAssignModal'), reportId=parseInt(modal.dataset.reportId,10), incidentId=parseInt(modal.dataset.incidentId,10);
+    if(isNaN(reportId)||isNaN(incidentId)){showNotification('Invalid IDs','error');return;}
+    var btn=document.getElementById('ommsSubmitBtn'); btn.disabled=true; btn.textContent='⏳ Sending…';
+    try{ var res=await fetch('/api/incident/'+incidentId+'/assign_to_omms',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({report_id:reportId})}); var data=await res.json();
+    if(data.success){ document.getElementById('ommsAssignModal').classList.remove('show'); showNotification('✅ Sent to OMMS (ID: '+data.omms_unique_id+')','success'); if(selectedIncident)await showConsumerDetails(selectedIncident); await refreshData(); }
+    else{ showNotification('❌ OMMS: '+data.error,'error'); btn.disabled=false; btn.textContent='📋 Confirm & Send to OMMS'; } }
+    catch(e){ showNotification('Network error','error'); btn.disabled=false; btn.textContent='📋 Confirm & Send to OMMS'; }
+}
+function closeOmmsAssignModal(){ document.getElementById('ommsAssignModal').classList.remove('show'); }
+
+function _ommsSection(t){return({power_outage:'Primary Line',sdi_problem:'Secondary Line',fallen_wire:'Secondary Line',transformer_issue:'Primary Line',fire_hazard:'Primary Line',sparking:'Secondary Line',partial_outage:'Secondary Line'})[t]||'Primary Line';}
+function _ommsCause(t,d){d=d.toLowerCase();if(/tree|vegetation|bamboo|clearing|ipil|acacia|mango/.test(d))return'Vegetation';if(/cut-off|cutoff|cut off|cut wire|neutral line/.test(d))return'Cut-off pri/sec/sdi line';if(/leaning pole|fallen pole|pole down|leaning/.test(d))return'Correction of leaning pole/s';if(/animal|snake|bird|rat|cat/.test(d))return'Birds/snakes/etc.';if(/fuse|blown|busted/.test(d))return'Blown fuse';if(/transformer|xfmr|transient/.test(d))return'Transient fault';if(/fire|burning|burnt|smoke/.test(d))return'Blown fuse';return({power_outage:'Transient fault',sdi_problem:'Cut-off pri/sec/sdi line',fallen_wire:'Cut-off pri/sec/sdi line',transformer_issue:'Transformer related',fire_hazard:'Blown fuse',sparking:'Others'})[t]||'Others';}
+function _ommsEquip(t,d){d=d.toLowerCase();if(/transformer|xfmr/.test(d))return'Transformer';if(/fuse cut|cutout|cut-out/.test(d))return'Fuse cut-out';if(/pole/.test(d))return'Poles';if(/wire|line|neutral/.test(d))return'Others';return({transformer_issue:'Transformer',fallen_wire:'Others'})[t]||'Others';}
+function _ommsPriorityType(p){return({CRITICAL:'high',HIGH:'high',MEDIUM:'medium',LOW:'low'})[(p||'').toUpperCase()]||'high';}
+function _ommsSubstation(f,t){var m={'Feeder 7':'San Miguel S/S','Feeder 8':'San Miguel S/S','Feeder 9':'San Miguel S/S','Feeder 10':'San Miguel S/S','Feeder 11':'Pavia S/S','Feeder 12':'Pavia S/S','Feeder 12A':'Pavia S/S','Feeder 13':'Oton S/S','Feeder 14':'Oton S/S','Feeder 15':'Oton S/S','Feeder 16':'Guimbal S/S','Feeder 17':'Guimbal S/S','Feeder 18':'Guimbal S/S','Feeder 19':'Guimbal S/S','Feeder 20':'Leganes S/S','Feeder 21':'Leganes S/S','Feeder 22':'Leganes S/S','Feeder 23':'Leganes S/S'};return m[f]||(t?t+' S/S':'Unknown S/S');}
+
+async function restoredConsumer(reportId){ if(!confirm('Mark this consumer as RESTORED?'))return; try{ var res=await fetch('/api/update_report_status/'+reportId,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({status:'RESTORED'})}); var data=await res.json(); if(data.success){showNotification('Consumer RESTORED ✓','success');if(selectedIncident)await showConsumerDetails(selectedIncident);}else showNotification(data.error||'Failed','error'); }catch(_){showNotification('Network error','error');} }
+async function removeIncident(id){ if(!confirm('⚠️ PERMANENTLY DELETE this incident and all reports?\n\nThis CANNOT be undone!'))return; try{ var res=await fetch('/api/incident/'+id+'/remove',{method:'DELETE',credentials:'same-origin'}); var data=await res.json(); if(data.success){showNotification('Incident removed ✓','success');await refreshData();showClusterView();}else showNotification(data.error||'Failed','error'); }catch(_){showNotification('Network error','error');} }
+async function removeReport(reportId){ if(!confirm('⚠️ Remove this consumer report?\n\nThis cannot be undone!'))return; try{ var res=await fetch('/api/report/'+reportId+'/remove',{method:'DELETE',credentials:'same-origin'}); var data=await res.json(); if(data.success){showNotification('Report removed ✓','success');if(selectedIncident)await showConsumerDetails(selectedIncident);await refreshData();}else showNotification(data.error||'Failed','error'); }catch(_){showNotification('Network error','error');} }
+
+async function updateIncidentRemarks(incidentId,remarks){
+    var input=document.getElementById('remarks_'+incidentId); var original=input?.dataset.originalValue||'';
+    if(remarks.trim()===original.trim())return;
+    try{ if(input){input.style.borderColor='#3b82f6';input.disabled=true;}
+    var res=await fetch('/api/incident/'+incidentId+'/remarks',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin',body:JSON.stringify({remarks:remarks.trim()})});
+    var data=await res.json();
+    if(data.success){ if(input){input.dataset.originalValue=remarks.trim();input.style.borderColor='#10b981';} showNotification('✓ Remarks saved','success'); setTimeout(()=>{if(input){input.style.borderColor='#e5e7eb';input.disabled=false;}},1000); }
+    else throw new Error(data.error||'Failed');
+    }catch(e){ if(input){input.value=original;input.style.borderColor='#dc2626';} showNotification('Failed to save remarks: '+e.message,'error'); setTimeout(()=>{if(input){input.style.borderColor='#e5e7eb';input.disabled=false;}},2000); }
+}
+
+/* ═══════════════════════════════════════════════════
+   showConsumerDetailsModal — FIX 3 photo gallery
+   Photos now displayed as a gallery section inside the modal.
+═══════════════════════════════════════════════════ */
+function showConsumerDetailsModal(c) {
+    document.getElementById('modalTitle').textContent = 'Consumer Report #' + c.report_id;
+
+    var sc = (c.status || 'NEW').toLowerCase().replace('_', '');
+
+    var full  = { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true };
+    var short = { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:true };
+    function phFmt(opts, iso) {
+        try { return iso ? new Intl.DateTimeFormat('en-US', Object.assign({}, opts, { timeZone:'Asia/Manila' })).format(new Date(iso)) : 'N/A'; }
+        catch (_) { return 'N/A'; }
+    }
+
+    var OUTAGE_TYPES_MODAL = ['power_outage', 'sdi_problem', 'voltage_issue', 'partial_outage', 'streetlight'];
+    var HAZARD_TYPES_MODAL = ['fallen_wire', 'leaning_pole', 'tree_branch', 'transformer_issue',
+                               'fire_hazard', 'sparking', 'equipment_damage', 'other'];
+    var isOutageTypeModal = OUTAGE_TYPES_MODAL.includes(c.incident_type || '');
+    var isHazardTypeModal = HAZARD_TYPES_MODAL.includes(c.incident_type || '');
+
+    var startTimeLabel = isHazardTypeModal ? '📋 Incident Reported'
+                       : isOutageTypeModal ? '⚡ Outage Started'
+                       : '📋 Incident Reported';
+
+    var INCIDENT_TYPE_LABELS_MODAL = {
+        power_outage:'⚡ Power Outage', fallen_wire:'⚠️ Fallen Wire',
+        leaning_pole:'🔧 Leaning Pole', tree_branch:'🌳 Tree on Line',
+        transformer_issue:'💥 Transformer Issue', fire_hazard:'🔥 Fire / Burning',
+        sparking:'⚡ Sparking / Arcing', voltage_issue:'📊 Voltage Problem',
+        sdi_problem:'🏠 No Power (House Only)', streetlight:'💡 Streetlight',
+        equipment_damage:'🔧 Equipment Damage', other:'📋 Other Emergency',
+        partial_outage:'⚡ Partial Outage'
+    };
+    var incTypeLabelModal = INCIDENT_TYPE_LABELS_MODAL[c.incident_type]
+                          || (c.incident_type || 'Unknown').replace(/_/g, ' ');
+
+    var startTime = 'N/A';
+    if (isHazardTypeModal) {
+        startTime = phFmt(short, c.timestamp);
+    } else if (c.incident_time && c.timestamp && isOutageTypeModal) {
+        try {
+            var d = new Date(c.timestamp);
+            var parts = c.incident_time.split(':');
+            d.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0, 0, 0);
+            if (d.getTime() > Date.now()) d = new Date(c.timestamp);
+            startTime = phFmt(short, d.toISOString());
+        } catch (e) { startTime = phFmt(short, c.timestamp); }
+    } else if (c.timestamp) {
+        startTime = phFmt(short, c.timestamp);
+    }
+
+    // ── FIX 2: severity badge for modal header ────────
+    var modalSevBadge = buildConsumerSevBadge(c.incident_type, c.priority);
+
+    // ── FIX 3: parse photo_urls for modal gallery ─────
+    var photoUrls = [];
+    if (c.photo_urls) {
+        try {
+            photoUrls = Array.isArray(c.photo_urls) ? c.photo_urls : JSON.parse(c.photo_urls);
+        } catch(e) { photoUrls = []; }
+    }
+    var photoGalleryHtml = buildModalPhotoGallery(photoUrls);
+
+    document.getElementById('modalBody').innerHTML =
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-bottom:20px;">'
+
+        // Personal Information
+        + '<div>'
+        +   '<h3 style="color:#1e40af;margin-bottom:15px;font-size:16px;">👤 Personal Information</h3>'
+        +   '<div style="background:#f9fafb;padding:15px;border-radius:8px;">'
+        +     '<p style="margin:8px 0;"><strong>Full Name:</strong> '    + esc(c.full_name      || 'N/A') + '</p>'
+        +     '<p style="margin:8px 0;"><strong>Contact:</strong> '      + esc(c.contact_number || 'N/A') + '</p>'
+        +     '<p style="margin:8px 0;"><strong>Email:</strong> '        + esc(c.email          || 'N/A') + '</p>'
+        +     '<p style="margin:8px 0;"><strong>Account #:</strong> '    + esc(c.account_number || 'N/A') + '</p>'
+        +     (c.reference_id
+                ? '<p style="margin:8px 0;"><strong>📋 Reference ID:</strong> '
+                +   '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;'
+                +   'background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;border-radius:8px;'
+                +   'font-family:monospace;font-size:13px;font-weight:700;letter-spacing:.4px;">'
+                +   esc(c.reference_id) + '</span></p>'
+                : '<p style="margin:8px 0;color:#9ca3af;font-size:12px;"><strong>📋 Reference ID:</strong> <em>Not assigned</em></p>')
+        +   '</div>'
+        + '</div>'
+
+        // Status & Tracking
+        + '<div>'
+        +   '<h3 style="color:#1e40af;margin-bottom:15px;font-size:16px;">📊 Status &amp; Tracking</h3>'
+        +   '<div style="background:#f9fafb;padding:15px;border-radius:8px;">'
+        +     '<p style="margin:8px 0;"><strong>Status:</strong> '
+        +       '<span class="status-badge ' + sc + '">' + (c.status || 'NEW') + '</span></p>'
+        // FIX 2: severity badge in modal
+        +     '<p style="margin:8px 0;"><strong>Severity:</strong> ' + modalSevBadge + '</p>'
+        +     '<p style="margin:8px 0;"><strong>📋 Incident Type:</strong> '
+        +       '<span style="display:inline-flex;align-items:center;padding:2px 9px;border-radius:8px;'
+        +       'font-size:12px;font-weight:700;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;">'
+        +       esc(incTypeLabelModal) + '</span></p>'
+        +     '<p style="margin:8px 0;"><strong>' + startTimeLabel + ':</strong> '
+        +       '<span style="color:#dc2626;font-weight:600;">' + startTime + '</span></p>'
+        +     '<p style="margin:8px 0;"><strong>📝 Submitted:</strong> '
+        +       '<span style="color:#6b7280;font-size:12px;">' + phFmt(full, c.timestamp) + '</span></p>'
+        +     (c.assigned_at
+                ? '<p style="margin:8px 0;"><strong>📋 Assigned:</strong> '
+                +   '<span style="color:#f59e0b;font-weight:600;">' + phFmt(full, c.assigned_at) + '</span></p>'
+                : '')
+        +     (c.restored_at
+                ? '<p style="margin:8px 0;"><strong>✅ Restored:</strong> '
+                +   '<span style="color:#10b981;font-weight:600;">' + phFmt(full, c.restored_at) + '</span></p>'
+                : '')
+        +   '</div>'
+        + '</div>'
+        + '</div>'
+
+        // Details
+        + '<div style="margin-bottom:20px;">'
+        +   '<h3 style="color:#1e40af;margin-bottom:15px;font-size:16px;">📝 Details</h3>'
+        +   '<div style="background:#f9fafb;padding:15px;border-radius:8px;">'
+        +     '<p><strong>Address:</strong> '       + esc(c.address   || 'N/A') + '</p>'
+        +     '<p style="margin-top:8px;"><strong>Barangay:</strong> ' + esc(c.barangay || 'N/A')
+        +       ' | <strong>Town:</strong> '        + esc(c.town      || 'N/A') + '</p>'
+        +     '<p style="margin-top:8px;"><strong>Landmark:</strong> ' + esc(c.landmark || 'N/A') + '</p>'
+        +     '<p style="margin-top:12px;line-height:1.6;">'           + esc(c.details  || 'No details provided') + '</p>'
+        +   '</div>'
+        + '</div>'
+
+        // FIX 3: Photo gallery section in modal
+        + photoGalleryHtml
+
+        // Action buttons
+        + '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">'
+        + (c.status === 'RESTORED'
+            ? '<div style="padding:12px 24px;background:#d1fae5;color:#065f46;border-radius:8px;font-weight:700;display:flex;align-items:center;gap:8px;">✅ Already Restored</div>'
+            : c.status === 'NEW'
+                ? '<button onclick="assignConsumer('  + c.report_id + ');closeModal();" class="table-action-btn assign" style="padding:12px 24px;">📋 Assign to Crew</button>'
+                + '<button onclick="restoredConsumer(' + c.report_id + ');closeModal();" class="table-action-btn restored" style="padding:12px 24px;">✓ Mark as Restored</button>'
+                : '<button onclick="restoredConsumer(' + c.report_id + ');closeModal();" class="table-action-btn restored" style="padding:12px 24px;">✓ Mark as Restored</button>')
+        + '<button onclick="removeReport('  + c.report_id + ');closeModal();" class="table-action-btn remove" style="padding:12px 24px;">🗑️ Remove</button>'
+        + '<button onclick="closeModal()" style="padding:12px 24px;background:#6b7280;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Close</button>'
+        + '</div>';
+
+    document.getElementById('incidentModal').classList.add('show');
+}
+
+function closeModal(){ document.getElementById('incidentModal').classList.remove('show'); }
+
+function showNotification(msg,type='info'){
+    if(!document.querySelector('#toast-style')){ var s=document.createElement('style'); s.id='toast-style'; s.textContent='@keyframes slideIn{from{transform:translateX(400px);opacity:0}to{transform:translateX(0);opacity:1}}@keyframes slideOut{from{transform:translateX(0);opacity:1}to{transform:translateX(400px);opacity:0}}'; document.head.appendChild(s); }
+    var t=document.createElement('div');
+    t.style.cssText='position:fixed;top:80px;right:20px;background:'+(type==='error'?'#dc2626':type==='success'?'#10b981':'#2563eb')+';color:#fff;padding:16px 24px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:9999;font-weight:600;animation:slideIn .3s ease-out;max-width:400px;';
+    t.textContent=msg; document.body.appendChild(t);
+    setTimeout(()=>{ t.style.animation='slideOut .3s ease-out'; setTimeout(()=>t.remove(),300); },4000);
+}
+
+window.jumpToTodaysReports=function(){
+    document.getElementById('outageDropdown')?.classList.remove('open');
+    var today=new Date(), pad=n=>String(n).padStart(2,'0');
+    var localISO=today.getFullYear()+'-'+pad(today.getMonth()+1)+'-'+pad(today.getDate())+'T00:00';
+    var todayEnd=today.getFullYear()+'-'+pad(today.getMonth()+1)+'-'+pad(today.getDate())+'T23:59';
+    var fromEl=document.getElementById('dateFrom'), toEl=document.getElementById('dateTo');
+    if(fromEl)fromEl.value=localISO; if(toEl)toEl.value=todayEnd;
+    applyFilters(); document.querySelector('.detail-panel')?.scrollIntoView({behavior:'smooth'});
+};
+
+document.getElementById('incidentModal').addEventListener('click',e=>{if(e.target.id==='incidentModal')closeModal();});
+document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){
+        if(document.getElementById('incidentModal').classList.contains('show'))closeModal();
+        else if(document.getElementById('ommsAssignModal').classList.contains('show'))closeOmmsAssignModal();
+        else if(document.getElementById('consumerViewMode').classList.contains('active'))showClusterView();
+    }
+});
+
+let _dashRefreshTimer=null, _dashBadgeTimer=null;
+document.addEventListener('DOMContentLoaded',()=>{
+    initializeWebSocket(); refreshData();
+    document.getElementById('smartViewBtn')?.classList.add('active');
+    clearInterval(_dashRefreshTimer); clearInterval(_dashBadgeTimer);
+    let _lastKnownTs = null;
+    async function smartPoll() {
+        try {
+            const res  = await fetch('/api/incidents/last_updated', {credentials:'same-origin'});
+            const data = await res.json();
+            if (data.ts && data.ts !== _lastKnownTs) {
+                _lastKnownTs = data.ts;
+                await refreshData();
+            }
+        } catch(e) {}
+    }
+    _dashRefreshTimer = setInterval(smartPoll, 20000);
+    _dashBadgeTimer=setInterval(loadBadgeCounts, 120000);
+    document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ refreshData(); loadBadgeCounts(); } });
+});
+</script>
+</body>
+</html>

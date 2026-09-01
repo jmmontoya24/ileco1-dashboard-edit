@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Report a Problem with Your Electric Meter — ILECO1</title>
+<meta name="description" content="Easily report a broken, damaged, or unsafe electric meter to ILECO1. Friendly, step-by-step guidance for households.">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="dns-prefetch" href="https://fonts.googleapis.com">
+
+<link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" as="style">
+
+<!-- Non-blocking font load — fixes slow first paint inside the Facebook
+     Messenger in-app browser, which is slow to open new cross-origin
+     connections. The page now renders immediately with the fallback
+     font stack and swaps in Inter/JetBrains Mono once fetched. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" media="print" onload="this.media='all'">
+<noscript>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+</noscript>
+
+<style>
+:root {
+  --gray-50: #F8FAFC;
+  --gray-100: #F1F5F9;
+  --gray-200: #E2E8F0;
+  --gray-300: #CBD5E1;
+  --gray-600: #475569;
+  --gray-700: #334155;
+  --gray-900: #0F172A;
+  
+  --brand-primary: #0284C7;
+  --brand-dark: #0369A1;
+  --brand-light: #F0F9FF;
+  --brand-border: #BAE6FD;
+  
+  --hazard-red: #DC2626;
+  --hazard-bg: #FEF2F2;
+  --hazard-text: #991B1B;
+  --hazard-border: #FEE2E2;
+  
+  --success-green: #16A34A;
+  --success-bg: #F0FDF4;
+  --success-text: #166534;
+  
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+  
+  --shadow-sm: 0 1px 3px 0 rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+  --shadow-lg: 0 20px 25px -5px rgba(15, 23, 42, 0.06), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+  
+  --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; background-color: var(--gray-50); color: var(--gray-900); }
+body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; padding-bottom: 120px; }
+
+header { background: #fff; border-bottom: 1px solid var(--gray-200); padding: 20px 24px; position: sticky; top: 0; z-index: 50; box-shadow: var(--shadow-sm); }
+.header-container { max-width: 720px; margin: 0 auto; display: flex; align-items: center; gap: 16px; }
+.logo-mark { background: var(--brand-primary); color: #fff; font-family: var(--font-sans); font-weight: 700; font-size: 16px; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); }
+.logo-text h1 { font-size: 16px; font-weight: 700; color: var(--gray-900); letter-spacing: -0.01em; }
+.logo-text p { font-size: 13px; color: var(--gray-600); margin-top: 2px; }
+
+main { max-width: 720px; margin: 0 auto; padding: 32px 20px; }
+
+/* Introduction Banner */
+.intro-banner { margin-bottom: 28px; }
+.intro-banner h2 { font-size: 24px; font-weight: 700; color: var(--gray-900); letter-spacing: -0.02em; margin-bottom: 8px; }
+.intro-banner p { font-size: 15px; line-height: 1.6; color: var(--gray-600); }
+
+/* Accessible Wizard Stepper */
+.stepper-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; background: #fff; padding: 16px 24px; border-radius: var(--radius-md); border: 1px solid var(--gray-200); box-shadow: var(--shadow-sm); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.step-node { display: flex; align-items: center; gap: 10px; cursor: pointer; border: none; background: transparent; font-size: 14px; font-weight: 500; color: var(--gray-600); transition: var(--transition-fast); flex-shrink: 0; padding: 4px 8px; border-radius: var(--radius-sm); }
+.step-node:hover { color: var(--brand-primary); background: var(--brand-light); }
+.step-node .circle { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--gray-300); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; background: #fff; transition: var(--transition-fast); }
+.step-node.active { color: var(--gray-900); font-weight: 600; }
+.step-node.active .circle { border-color: var(--brand-primary); background: var(--brand-primary); color: #fff; box-shadow: 0 0 0 4px var(--brand-light); }
+.step-node.done { color: var(--success-text); }
+.step-node.done .circle { border-color: var(--success-green); background: var(--success-green); color: #fff; }
+.step-node-line { flex-grow: 1; min-width: 16px; height: 2px; background: var(--gray-200); margin: 0 12px; }
+
+/* Panels and Containers */
+.panel { display: none; background: #fff; border-radius: var(--radius-lg); border: 1px solid var(--gray-200); box-shadow: var(--shadow-md); padding: 36px; margin-bottom: 24px; }
+.panel.active { display: block; animation: slideUp 0.25s ease-out; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.panel-title { font-size: 20px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; border-bottom: 2px solid var(--gray-100); padding-bottom: 12px; }
+.panel-desc { font-size: 14.5px; color: var(--gray-600); margin-bottom: 28px; line-height: 1.5; }
+
+/* Grid Layout Framework */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; gap: 20px; } .panel { padding: 24px 20px; } }
+
+/* Informative Form Input Mechanics */
+.field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; position: relative; }
+.field:last-child { margin-bottom: 0; }
+.field label { font-size: 14.5px; font-weight: 600; color: var(--gray-900); display: flex; align-items: center; justify-content: space-between; }
+.field label .req { color: var(--hazard-red); font-weight: bold; margin-left: 4px; }
+.field .hint { font-size: 13px; color: var(--gray-600); line-height: 1.4; margin-top: 2px; }
+
+.input, .select, textarea.input {
+  width: 100%; font-family: var(--font-sans); font-size: 15px; color: var(--gray-900); background: #fff; border: 1.5px solid var(--gray-300); border-radius: var(--radius-md); padding: 14px 16px; min-height: 50px; transition: var(--transition-fast); outline: none; box-shadow: var(--shadow-sm);
+}
+.input:hover, .select:hover { border-color: var(--gray-400); }
+.input:focus, .select:focus, textarea.input:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 4px var(--brand-light); }
+.mono-input { font-family: var(--font-mono); letter-spacing: 0.02em; font-size: 16px; }
+textarea.input { min-height: 120px; resize: vertical; line-height: 1.5; }
+
+.select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' fill='none' stroke='%23475569' stroke-width='2'%3E%3Cpath d='M4 7l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 16px center; padding-right: 44px; }
+.select:disabled { background-color: var(--gray-100); color: var(--gray-600); cursor: not-allowed; border-color: var(--gray-200); }
+
+/* Accessible Validation Status Elements */
+.input.invalid, .select.invalid { border-color: var(--hazard-red); background-color: #FFFDFD; box-shadow: 0 0 0 1px var(--hazard-red); }
+.field-error { font-size: 13.5px; color: var(--hazard-red); display: none; font-weight: 500; margin-top: 6px; align-items: center; gap: 6px; }
+.field-error.show { display: flex; animation: shake 0.2s ease-in-out; }
+@keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+/* Intuitive Customer Choice Cards */
+.concern-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 600px) { .concern-grid { grid-template-columns: 1fr; } }
+.concern-opt { border: 1.5px solid var(--gray-200); border-radius: var(--radius-md); padding: 18px; cursor: pointer; background: #fff; display: flex; gap: 14px; transition: var(--transition-fast); text-align: left; box-shadow: var(--shadow-sm); position: relative; outline: none; }
+.concern-opt:hover { border-color: var(--brand-primary); background: var(--gray-50); transform: translateY(-1px); }
+.concern-opt:focus-visible { border-color: var(--brand-primary); box-shadow: 0 0 0 4px var(--brand-light); }
+.concern-opt .ring { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--gray-300); flex: none; display: flex; align-items: center; justify-content: center; margin-top: 2px; background: #fff; transition: var(--transition-fast); }
+.concern-opt .ring i { width: 10px; height: 10px; border-radius: 50%; background: transparent; transition: var(--transition-fast); }
+.concern-opt .t { font-weight: 600; font-size: 15px; color: var(--gray-900); display: block; line-height: 1.3; }
+.concern-opt .d { font-size: 13px; color: var(--gray-600); display: block; margin-top: 6px; line-height: 1.4; }
+
+.concern-opt.selected { border-color: var(--brand-primary); background: var(--brand-light); box-shadow: 0 0 0 1px var(--brand-primary); }
+.concern-opt.selected .ring { border-color: var(--brand-primary); }
+.concern-opt.selected .ring i { background: var(--brand-primary); }
+
+.concern-opt.hazard-selected { border-color: var(--hazard-red); background: var(--hazard-bg); box-shadow: 0 0 0 1px var(--hazard-red); }
+.concern-opt.hazard-selected .ring { border-color: var(--hazard-red); }
+.concern-opt.hazard-selected .ring i { background: var(--hazard-red); }
+
+/* Urgent Safety Warning Block */
+.hazard-note { display: none; gap: 14px; background: var(--hazard-bg); border-radius: var(--radius-md); padding: 20px; margin-top: 20px; border: 1.5px solid var(--hazard-border); color: var(--hazard-text); }
+.hazard-note.show { display: flex; animation: slideUp 0.2s ease-out; }
+.hazard-note svg { flex: none; color: var(--hazard-red); }
+.hazard-note strong { display: block; font-size: 16px; margin-bottom: 4px; font-weight: 700; }
+.hazard-note p { font-size: 14px; line-height: 1.5; }
+.hazard-note a { color: var(--hazard-text); font-weight: 700; text-decoration: underline; }
+
+/* Friendly Drag and Drop Document Pipeline */
+.upload-box { position: relative; border: 2.5px dashed var(--gray-300); border-radius: var(--radius-md); padding: 40px 24px; text-align: center; cursor: pointer; background: var(--gray-50); transition: var(--transition-fast); outline: none; }
+.upload-box:hover, .upload-box:focus-visible, .upload-box.drag { border-color: var(--brand-primary); background: var(--brand-light); }
+.upload-box input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.upload-icon { width: 48px; height: 48px; border-radius: 50%; background: #fff; border: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; color: var(--brand-primary); box-shadow: var(--shadow-sm); }
+.upload-box .u-title { font-weight: 600; font-size: 15px; color: var(--gray-900); }
+.upload-box .u-sub { font-size: 13px; color: var(--gray-600); margin-top: 6px; line-height: 1.4; }
+
+.file-list { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+@media (max-width: 560px) { .file-list { grid-template-columns: 1fr; } }
+.file-row { display: flex; align-items: center; gap: 14px; padding: 12px; border: 1.5px solid var(--gray-200); border-radius: var(--radius-md); background: #fff; box-shadow: var(--shadow-sm); }
+.file-row img { width: 52px; height: 52px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--gray-200); flex: none; }
+.file-row .meta { flex: 1; min-width: 0; }
+.file-row .meta .n { font-size: 14px; font-weight: 600; color: var(--gray-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-row .meta .s { font-size: 12px; color: var(--gray-600); font-family: var(--font-mono); margin-top: 2px; }
+.file-row button { border: none; background: transparent; color: var(--gray-600); cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: var(--transition-fast); }
+.file-row button:hover { background: var(--hazard-bg); color: var(--hazard-red); }
+
+/* Transparent Data Verification Presentation */
+.review-grid { display: flex; flex-direction: column; gap: 20px; }
+.review-group { border: 1.5px solid var(--gray-200); border-radius: var(--radius-md); padding: 20px; background: var(--gray-50); box-shadow: var(--shadow-sm); }
+.review-group-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1.5px solid var(--gray-200); }
+.review-group-head span { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-600); }
+.review-edit { border: none; background: none; color: var(--brand-primary); font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.review-edit:hover { color: var(--brand-dark); text-decoration: underline; }
+.review-rows { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+@media (max-width: 560px) { .review-rows { grid-template-columns: 1fr; gap: 12px; } }
+.review-row dt { font-size: 13px; color: var(--gray-600); margin-bottom: 4px; }
+.review-row dd { font-size: 15px; color: var(--gray-900); font-weight: 600; word-break: break-word; }
+.review-thumbs { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.review-thumbs img { width: 56px; height: 56px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--gray-300); }
+
+.confirm-row { display: flex; gap: 12px; cursor: pointer; border: 1.5px solid var(--gray-200); border-radius: var(--radius-md); padding: 16px; background: #fff; margin-top: 24px; box-shadow: var(--shadow-sm); transition: var(--transition-fast); }
+.confirm-row:hover { border-color: var(--brand-primary); background: var(--brand-light); }
+.confirm-row input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--brand-primary); flex: none; cursor: pointer; }
+.confirm-row span { font-size: 14.5px; color: var(--gray-700); line-height: 1.5; font-weight: 500; }
+
+/* Fixed Navigation Layout Frame */
+.action-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--gray-200); padding: 16px 24px; box-shadow: 0 -10px 25px -5px rgba(15, 23, 42, 0.08); z-index: 100; }
+.action-bar-inner { max-width: 720px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+
+.btn { font-family: var(--font-sans); font-size: 15.5px; font-weight: 600; padding: 14px 28px; border-radius: var(--radius-md); cursor: pointer; transition: var(--transition-fast); border: 2px solid transparent; display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; outline: none; }
+.btn-sec { background: #fff; border-color: var(--gray-300); color: var(--gray-700); box-shadow: var(--shadow-sm); }
+.btn-sec:hover { background: var(--gray-100); border-color: var(--gray-400); }
+.btn-sec:focus-visible { box-shadow: 0 0 0 4px var(--gray-200); }
+.btn-pri { background: var(--brand-primary); color: #fff; box-shadow: var(--shadow-sm); width: 100%; max-width: 240px; }
+.btn-pri:hover { background: var(--brand-dark); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-pri:focus-visible { box-shadow: 0 0 0 4px var(--brand-light); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+.spinner { width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; display: none; }
+.spinner.show { display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Global Alert Notifications */
+.alert { border-radius: var(--radius-md); padding: 18px; display: none; gap: 14px; margin-bottom: 28px; border: 1px solid transparent; line-height: 1.5; box-shadow: var(--shadow-sm); }
+.alert.show { display: flex; animation: slideUp 0.2s ease-out; }
+.alert svg { flex: none; margin-top: 2px; }
+.alert h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.alert p { font-size: 14px; }
+.alert-error { background: var(--hazard-bg); border-color: var(--hazard-border); color: var(--hazard-text); }
+.alert-info { background: #FFFDF5; border-color: #FDF4E3; color: #713F12; }
+.alert-ref { font-family: var(--font-mono); font-weight: 600; background: rgba(0,0,0,0.06); border-radius: 6px; padding: 2px 8px; font-size: 13px; }
+
+/* Premium Success Layout Presentation */
+.success-panel { display: none; text-align: center; background: #fff; border-radius: var(--radius-lg); border: 1px solid var(--gray-200); box-shadow: var(--shadow-lg); padding: 48px 32px; max-width: 600px; margin: 40px auto; }
+.success-panel.show { display: block; animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.success-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--success-bg); color: var(--success-green); display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; box-shadow: 0 0 0 6px #F0FDF4; }
+.success-panel h2 { font-size: 24px; font-weight: 700; color: var(--gray-900); margin-bottom: 12px; letter-spacing: -0.01em; }
+.success-panel > p { color: var(--gray-600); font-size: 15.5px; max-width: 480px; margin: 0 auto 28px; line-height: 1.6; }
+.meter-readout { background: var(--gray-900); border-radius: var(--radius-md); padding: 20px; max-width: 340px; margin: 0 auto 32px; text-align: center; box-shadow: var(--shadow-md); }
+.meter-readout .rl { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--gray-300); font-weight: 600; }
+.meter-readout .rv { font-family: var(--font-mono); font-size: 26px; font-weight: 700; color: #10B981; margin-top: 6px; letter-spacing: -0.02em; }
+
+footer { text-align: center; padding: 48px 24px; color: var(--gray-600); font-size: 13px; border-top: 1px solid var(--gray-200); margin-top: 60px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0s !important; transition-duration: 0s !important; scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-container">
+    <div class="logo-mark" aria-hidden="true">I1</div>
+    <div class="logo-text">
+      <h1>ILECO1 Customer Support Portal</h1>
+      <p>Iloilo Electric Cooperative, Inc.</p>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="intro-banner" id="introBanner">
+    <h2>Report a Problem with Your Electric Meter</h2>
+    <p>Please use this simple step-by-step form to let our service teams know what is happening with your meter. We will review your submission right away.</p>
+  </div>
+
+  <nav class="stepper-nav" id="stepperNav" aria-label="Steps to complete your report">
+    <button type="button" class="step-node active" data-step="1"><span class="circle">1</span><span>Your Info</span></button>
+    <div class="step-node-line"></div>
+    <button type="button" class="step-node" data-step="2"><span class="circle">2</span><span>Location</span></button>
+    <div class="step-node-line"></div>
+    <button type="button" class="step-node" data-step="3"><span class="circle">3</span><span>The Problem</span></button>
+    <div class="step-node-line"></div>
+    <button type="button" class="step-node" data-step="4"><span class="circle">4</span><span>Photos</span></button>
+    <div class="step-node-line"></div>
+    <button type="button" class="step-node" data-step="5"><span class="circle">5</span><span>Review</span></button>
+  </nav>
+
+  <div id="errAlert" class="alert alert-error" role="alert">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 8v5M12 16h.01"/></svg>
+    <div>
+      <h3>Please complete the missing items</h3>
+      <p id="errAlertText">Some mandatory fields require your attention before going forward.</p>
+    </div>
+  </div>
+
+  <div id="dupAlert" class="alert alert-info" role="status">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" d="M12 8v5M12 16h.01"/></svg>
+    <div>
+      <h3>Active Report Existing</h3>
+      <p id="dupAlertText"></p>
+    </div>
+  </div>
+
+  <form id="concernForm" novalidate autocomplete="on">
+    <section class="panel active" id="panel1" aria-labelledby="title1">
+      <h2 class="panel-title" id="title1">Your Account Information</h2>
+      <p class="panel-desc">Tell us who you are so we can easily search for your record in our system.</p>
+      
+      <div class="grid-2">
+        <div class="field">
+          <label for="accountNumber">Account Number <span class="req">*</span></label>
+          <input class="input mono-input" id="accountNumber" name="accountNumber" placeholder="2001321" autocomplete="off" aria-describedby="err_accountNumber" required>
+          <p class="hint">You can find this near the top of your monthly bill paper.</p>
+          <p class="field-error" id="err_accountNumber" role="alert"></p>
+        </div>
+        <div class="field">
+          <label for="consumerName">Account Owner's Full Name <span class="req">*</span></label>
+          <input class="input" id="consumerName" name="consumerName" placeholder="DELA CRUZ, JUAN MIGUEL" autocomplete="name" aria-describedby="err_consumerName" required>
+          <p class="hint">Enter your name exactly as printed on your bill: <strong>LAST NAME, FIRST NAME MIDDLE NAME</strong> (comma after last name only — no comma needed elsewhere).</p>
+          <p class="field-error" id="err_consumerName" role="alert"></p>
+        </div>
+      </div>
+      <div class="field" style="max-width: 400px; margin-top: -8px;">
+        <p class="hint" style="font-style: italic;">Example: VELADIEZ, DIONISIO RONCAL</p>
+      <div class="field" style="max-width: 400px;">
+        <label for="contactNumber">Mobile Phone Number <span class="req">*</span></label>
+        <input class="input mono-input" id="contactNumber" name="contactNumber" type="tel" inputmode="numeric" placeholder="09XXXXXXXXX" autocomplete="tel" aria-describedby="contactHint err_contactNumber" required>
+        <p class="hint" id="contactHint">We will automatically text updates regarding your technician's dispatch timeline to this phone.</p>
+        <p class="field-error" id="err_contactNumber" role="alert"></p>
+      </div>
+    </section>
+
+    <section class="panel" id="panel2" aria-labelledby="title2">
+      <h2 class="panel-title" id="title2">Meter Location Details</h2>
+      <p class="panel-desc">Help our engineers locate the exact property structure where the physical unit resides.</p>
+      
+      <div class="field" style="max-width: 400px;">
+        <label for="meterNumber">Meter Serial Number <span class="req">*</span></label>
+        <input class="input mono-input" id="meterNumber" name="meterNumber" placeholder="Look for the number stamped on the front face" aria-describedby="hint_meterNumber err_meterNumber" required>
+        <p class="hint" id="hint_meterNumber">This is printed on the physical unit faceplate housing sticker.</p>
+        <p class="field-error" id="err_meterNumber" role="alert"></p>
+      </div>
+      <div class="field">
+        <label for="serviceAddress">Street Address or Nearby Landmarks <span class="req">*</span></label>
+        <input class="input" id="serviceAddress" name="serviceAddress" placeholder="House/Lot number, Street name, or neighbor descriptions" autocomplete="street-address" aria-describedby="err_serviceAddress" required>
+        <p class="field-error" id="err_serviceAddress" role="alert"></p>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="town">Town / Municipality <span class="req">*</span></label>
+          <select class="select" id="town" name="town" aria-describedby="err_town" required><option value="">Select your town</option></select>
+          <p class="field-error" id="err_town" role="alert"></p>
+        </div>
+        <div class="field">
+          <label for="barangay">Barangay Sector <span class="req">*</span></label>
+          <select class="select" id="barangay" name="barangay" disabled aria-describedby="err_barangay" required><option value="">Select town first</option></select>
+          <p class="field-error" id="err_barangay" role="alert"></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel3" aria-labelledby="title3">
+      <h2 class="panel-title" id="title3">What seems to be the problem?</h2>
+      <p class="panel-desc">Please choose the option below that best fits what you are seeing with your household meter box.</p>
+      
+      <div class="field">
+        <label id="concernTypeLabel">Type of Observation <span class="req">*</span></label>
+        <div class="concern-grid" role="radiogroup" aria-labelledby="concernTypeLabel" id="concernGrid">
+          <div class="concern-opt" data-value="not_working" tabindex="0" role="radio" aria-checked="false">
+            <span class="ring"><i></i></span>
+            <div><span class="t">Blank / Dead Screen</span><span class="d">The digital screen is off, blank, or completely frozen.</span></div>
+          </div>
+          <div class="concern-opt" data-value="high_consumption" tabindex="0" role="radio" aria-checked="false">
+            <span class="ring"><i></i></span>
+            <div><span class="t">Unusually High Bill</span><span class="d">A huge sudden usage increase independent of lifestyle load adjustments.</span></div>
+          </div>
+          <div class="concern-opt" data-value="running_fast_slow" tabindex="0" role="radio" aria-checked="false">
+            <span class="ring"><i></i></span>
+            <div><span class="t">Spinning Too Quickly / Slowly</span><span class="d">Physical disc rotations or indicators look misaligned with consumption.</span></div>
+          </div>
+          <div class="concern-opt" data-value="noise_burning" tabindex="0" role="radio" aria-checked="false">
+            <span class="ring"><i></i></span>
+            <div><span class="t">Sparks, Noise, or Smoke Smell</span><span class="d">Urgent status: there are active sparks or standard burning odors coming out.</span></div>
+          </div>
+          <div class="concern-opt" data-value="tampered_seal" tabindex="0" role="radio" aria-checked="false">
+            <span class="ring"><i></i></span>
+            <div><span class="t">Broken or Missing Safety Seal</span><span class="d">The metallic wire lock or outer case protection link appears broken.</span></div>
+          </div>
+          <div class="concern-opt" data-value="others" tabindex="0" role="radio" aria-checked="false">
+            <span class="ring"><i></i></span>
+            <div><span class="t">Something Else</span><span class="d">A different type of problem. Describe it down in the text area.</span></div>
+          </div>
+        </div>
+        <p class="field-error" id="err_concernType" role="alert"></p>
+      </div>
+
+      <div class="hazard-note" id="hazardNote" role="alert">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        <div>
+          <strong>Important Safety Step: Stay at a Safe Distance</strong>
+          <p>Please turn off your main structural breaker switches inside your home if possible. Do not get close to the meter. For your safety, call our emergency team instantly at <a href="tel:09989893028">0998-989-3028</a> if there is immediate fire danger.</p>
+        </div>
+      </div>
+
+      <div class="field" id="otherConcernField" style="display:none;">
+        <label for="otherConcern">Please specify the problem briefly <span class="req">*</span></label>
+        <input class="input" id="otherConcern" name="otherConcern" placeholder="Summarize what you observed" aria-describedby="err_otherConcern">
+        <p class="field-error" id="err_otherConcern" role="alert"></p>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label for="dateNoticed">When did you first notice this? <span class="req">*</span></label>
+          <input class="input" id="dateNoticed" name="dateNoticed" type="date" aria-describedby="err_dateNoticed" required>
+          <p class="field-error" id="err_dateNoticed" role="alert"></p>
+        </div>
+      </div>
+
+      <div class="field">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+          <label for="additionalDetails">Additional Information <span style="font-weight: 400; color: var(--gray-600); font-size:13.5px;">(Optional)</span></label>
+          <span class="hint" id="detailsCount" style="font-family: var(--font-mono)">0 / 500</span>
+        </div>
+        <textarea class="input" id="additionalDetails" name="additionalDetails" maxlength="500" placeholder="Please add any helpful context here (e.g. noticed after heavy storm, tree branch hit the service drop lines, etc.)."></textarea>
+      </div>
+    </section>
+
+    <section class="panel" id="panel4" aria-labelledby="title4">
+      <h2 class="panel-title" id="title4">Upload Helpful Photos</h2>
+      <p class="panel-desc">Adding clear photos helps our technical team identify what parts to pack before leaving the warehouse station.</p>
+      
+      <div class="field">
+        <div class="upload-box" id="uploadBox" tabindex="0">
+  <input type="file" id="fileInput" name="files[]" multiple
+         accept="image/jpeg,image/png,image/webp"
+         aria-label="Upload clear pictures of the meter box"
+         aria-describedby="err_files">
+  <div class="upload-icon">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3"/></svg>
+  </div>
+  <div class="u-title">Click here to Open Camera or Choose Files</div>
+  <div class="u-sub">Accepts standard images (JPG, PNG, WEBP) · Up to 5 photos allowed · Max 2MB size limit per image</div>
+</div>
+        <p class="field-error" id="err_files" role="alert"></p>
+      </div>
+      <div class="file-list" id="fileList"></div>
+    </section>
+
+    <section class="panel" id="panel5" aria-labelledby="title5">
+      <h2 class="panel-title" id="title5">Review Your Answers</h2>
+      <p class="panel-desc">Please double-check everything for typos before sending. This ensures your field technician reaches the proper site directly.</p>
+      
+      <div class="review-grid" id="reviewGrid"></div>
+      
+      <label class="confirm-row" for="confirmAccurate">
+        <input type="checkbox" id="confirmAccurate" name="confirmAccurate" aria-describedby="err_confirmAccurate">
+        <span>I confirm that all information added above is accurate and reflects the current situation at my house.</span>
+      </label>
+      <p class="field-error" id="err_confirmAccurate" role="alert"></p>
+    </section>
+
+    <div class="action-bar">
+      <div class="action-bar-inner">
+        <button type="button" class="btn btn-sec" id="prevBtn" style="visibility: hidden;">Go Back</button>
+        <button type="button" class="btn btn-pri" id="nextBtn">Continue</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="success-panel" id="successPanel" role="status">
+    <div class="success-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+    </div>
+    <h2>Report Received Successfully</h2>
+    <p>Thank you for letting us know about this problem. Your request has been stored directly into our operational dispatch engineering dashboard queue.</p>
+    <div class="meter-readout">
+  <div class="rl">Your Tracking Reference Number</div>
+  <div class="rv" id="refNumberOut">—</div>
+</div>
+
+<div id="messengerCTA" style="background:#eff6ff;border:1px solid #bfdbfe;
+     border-radius:12px;padding:16px;margin:0 auto 24px;max-width:340px;
+     text-align:left;"></div>
+    <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+      <button type="button" class="btn btn-sec" onclick="location.reload()">Back to Home</button>
+    </div>
+  </div>
+</main>
+
+<footer>&copy; 2026 Iloilo Electric Cooperative, Inc. (ILECO1) · All Rights Reserved</footer>
+
+<script src="/static/js/ileco-geodata.js"></script>
+<script>
+const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+const CSRF_TOKEN = csrfMeta ? csrfMeta.content : '';
+
+const FB_PAGE_ID = '112388708468440'; // ← REPLACE with your real ILECO-1 Page ID
+
+function sanitizeRef(ref) {
+  // Facebook only allows letters, numbers, +, -, _, = in ref params
+  return String(ref).replace(/[^a-zA-Z0-9+\-_=]/g, '').slice(0, 250);
+}
+
+function messengerLink(ref) {
+  const cleanRef = sanitizeRef(ref);
+  return `https://m.me/${FB_PAGE_ID}?ref=${cleanRef}`;
+}
+
+
+let currentStep = 1;
+let selectedConcern = '';
+let files = [];
+
+const REQUIRED_STEPS_MAP = {
+  1: ['accountNumber', 'consumerName', 'contactNumber'],
+  2: ['meterNumber', 'serviceAddress', 'town', 'barangay'],
+  3: ['dateNoticed'],
+  4: []
+};
+
+const VALIDATION_RULES = {
+  accountNumber: { re:/^[A-Za-z0-9\-]{4,20}$/, msg:'Please enter a valid Account Number (letters, numbers, and hyphens accepted).' },
+  consumerName: { re:/^[A-Za-zÑñ.,'\-\s]{2,100}$/, msg:'Please enter your name in "LAST NAME, FIRST NAME MIDDLE NAME" order, exactly as printed on your bill.' },
+  contactNumber: { re:/^09\d{9}$/, msg:'Please type a complete 11-digit mobile number starting with 09.' },
+  meterNumber: { re:/^[A-Za-z0-9\-]{3,20}$/, msg:'Please verify your serial code entry (3–20 matching numbers/letters).' },
+  serviceAddress: { re: null, msg:'Please write down your street address or a close landmark to help us find you.' },
+  town: { re: null, msg:'Please select your town from the choices list.' },
+  barangay: { re: null, msg:'Please select your barangay sector from the choices list.' },
+  dateNoticed: { re: null, msg:'Please select the date when you first spotted this concern.' }
+};
+
+const CONCERN_LABELS = {
+  not_working: 'Blank / Dead Screen',
+  high_consumption: 'Unusually High Bill',
+  running_fast_slow: 'Spinning Too Quickly / Slowly',
+  noise_burning: 'Sparks, Noise, or Smoke Smell',
+  tampered_seal: 'Broken or Missing Safety Seal',
+  others: 'Something Else'
+};
+
+/* Core Engine Step Navigator Orchestrator */
+function navigateToStep(targetStep) {
+  if (targetStep > currentStep) {
+    if (!validateCurrentStepScope()) return;
+  }
+  
+  document.getElementById(`panel${currentStep}`).classList.remove('active');
+  document.getElementById(`panel${targetStep}`).classList.add('active');
+  
+  currentStep = targetStep;
+  updateUIWizardControls();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateUIWizardControls() {
+  document.querySelectorAll('.step-node').forEach(node => {
+    const stepNum = parseInt(node.dataset.step);
+    node.classList.toggle('active', stepNum === currentStep);
+    node.classList.toggle('done', stepNum < currentStep);
+  });
+
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+
+  prevBtn.style.visibility = currentStep === 1 ? 'hidden' : 'visible';
+  
+  if (currentStep === 5) {
+    buildReviewSummary();
+    nextBtn.innerHTML = '<span>Submit My Report</span> <div class="spinner" id="btnSpinner"></div>';
+    nextBtn.className = 'btn btn-pri';
+    nextBtn.style.maxWidth = "280px";
+  } else {
+    nextBtn.textContent = 'Continue';
+    nextBtn.className = 'btn btn-pri';
+    nextBtn.style.maxWidth = "240px";
+  }
+}
+
+async function validateCurrentStepScope() {
+  let isStepValid = true;
+  const fields = REQUIRED_STEPS_MAP[currentStep] || [];
+  
+  fields.forEach(id => {
+    const el = document.getElementById(id);
+    const rules = VALIDATION_RULES[id];
+    const val = (el.value || '').trim();
+
+    if (!val) {
+      setInvalid(id, rules.msg);
+      isStepValid = false;
+    } else if (rules.re && !rules.re.test(val)) {
+      setInvalid(id, rules.msg);
+      isStepValid = false;
+    } else {
+      clearInvalid(id);
+    }
+  });
+
+  if (currentStep === 3) {
+    if (!selectedConcern) {
+      setInvalid('concernType', 'Please click on one of the problem choice boxes above.');
+      isStepValid = false;
+    } else {
+      clearInvalid('concernType');
+    }
+    if (selectedConcern === 'others' && !document.getElementById('otherConcern').value.trim()) {
+      setInvalid('otherConcern', 'Please add descriptive text parameters clarifying the custom item.');
+      isStepValid = false;
+    }
+  }
+
+  if (currentStep === 4 && files.length === 0) {
+    setUploadError('Please select or snap at least 1 image file context to support your case.');
+    isStepValid = false;
+  }
+
+  if (!isStepValid) {
+    showStepError();
+    return false;
+  }
+
+  // ── Server-side masterlist verification — blocks Continue on
+  // Step 1 (account number + name) and Step 2 (meter number) until
+  // the record matches consumer_masterlist.
+  if (currentStep === 1 || currentStep === 2) {
+    const verified = await verifyAgainstMasterlist();
+    if (!verified) {
+      showStepError();
+      return false;
+    }
+  }
+
+  document.getElementById('errAlert').classList.remove('show');
+  return true;
+}
+
+function showStepError() {
+  const errAlert = document.getElementById('errAlert');
+  errAlert.classList.add('show');
+  errAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function verifyAgainstMasterlist() {
+  const nextBtn = document.getElementById('nextBtn');
+  const originalText = nextBtn.textContent;
+  nextBtn.disabled = true;
+  nextBtn.textContent = 'Checking…';
+
+  const payload = {
+    account_number: document.getElementById('accountNumber').value.trim(),
+    consumer_name: document.getElementById('consumerName').value.trim(),
+  };
+  if (currentStep === 2) {
+    payload.meter_number = document.getElementById('meterNumber').value.trim();
+  }
+
+  try {
+    const res = await fetch('/api/verify_masterlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (data.valid) {
+      clearInvalid('accountNumber');
+      clearInvalid('consumerName');
+      clearInvalid('meterNumber');
+      return true;
+    }
+
+    if (data.field) {
+      setInvalid(data.field, data.error);
+      // Jump back to step 1 if the failing field is there but we're on step 2
+      if (currentStep === 2 && (data.field === 'accountNumber' || data.field === 'consumerName')) {
+        navigateBackTo(1);
+      }
+    } else {
+      document.getElementById('errAlertText').textContent = data.error;
+    }
+    return false;
+
+  } catch (e) {
+    document.getElementById('errAlertText').textContent =
+      'Could not verify your account right now. Please check your connection and try again.';
+    return false;
+  } finally {
+    nextBtn.disabled = false;
+    nextBtn.textContent = originalText;
+  }
+}
+
+function navigateBackTo(step) {
+  document.getElementById(`panel${currentStep}`).classList.remove('active');
+  document.getElementById(`panel${step}`).classList.add('active');
+  currentStep = step;
+  updateUIWizardControls();
+}
+
+function setInvalid(id, msg) {
+  const el = document.getElementById(id);
+  const err = document.getElementById('err_' + id);
+  if (el) el.classList.add('invalid');
+  if (err) { err.textContent = msg; err.classList.add('show'); }
+}
+
+function clearInvalid(id) {
+  const el = document.getElementById(id);
+  const err = document.getElementById('err_' + id);
+  if (el) el.classList.remove('invalid');
+  if (err) { err.textContent = ''; err.classList.remove('show'); }
+}
+
+/* UI Logic Hooks & Core Bindings */
+document.getElementById('nextBtn').addEventListener('click', async () => {
+  if (currentStep < 5) {
+    const ok = await validateCurrentStepScope();
+    if (ok) navigateToStepDirect(currentStep + 1);
+  } else {
+    submitTelemetryPayload();
+  }
+});
+
+document.getElementById('prevBtn').addEventListener('click', () => {
+  if (currentStep > 1) navigateToStep(currentStep - 1);
+});
+
+document.querySelectorAll('.step-node').forEach(node => {
+  node.addEventListener('click', () => {
+    const target = parseInt(node.dataset.step);
+    navigateToStep(target);
+  });
+});
+
+function navigateToStepDirect(targetStep) {
+  document.getElementById(`panel${currentStep}`).classList.remove('active');
+  document.getElementById(`panel${targetStep}`).classList.add('active');
+  currentStep = targetStep;
+  updateUIWizardControls();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+document.querySelectorAll('.step-node').forEach(node => {
+  node.addEventListener('click', async () => {
+    const target = parseInt(node.dataset.step);
+    if (target > currentStep) {
+      const ok = await validateCurrentStepScope();
+      if (!ok) return;
+    }
+    navigateToStepDirect(target);
+  });
+});
+/* Location Architecture Provisioners */
+function initializeGeographicControls() {
+  const townSelect = document.getElementById('town');
+  Object.keys(barangaysByTown).sort().forEach(town => {
+    const opt = document.createElement('option');
+    opt.value = town; opt.textContent = town;
+    townSelect.appendChild(opt);
+  });
+
+  townSelect.addEventListener('change', function() {
+    const brgySelect = document.getElementById('barangay');
+    brgySelect.innerHTML = '';
+    clearInvalid('town');
+
+    if (!this.value) {
+      brgySelect.innerHTML = '<option value="">Select town first</option>';
+      brgySelect.disabled = true;
+      return;
+    }
+    brgySelect.disabled = false;
+    brgySelect.innerHTML = '<option value="">Select your barangay</option>';
+    barangaysByTown[this.value].forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b; opt.textContent = b;
+      brgySelect.appendChild(opt);
+    });
+  });
+  
+  document.getElementById('barangay').addEventListener('change', () => clearInvalid('barangay'));
+}
+
+/* Concern Configuration Selection Matrix */
+document.querySelectorAll('.concern-opt').forEach(card => {
+  const selectCard = () => {
+    selectedConcern = card.dataset.value;
+    clearInvalid('concernType');
+    
+    document.querySelectorAll('.concern-opt').forEach(c => {
+      const match = c === card;
+      c.setAttribute('aria-checked', match ? 'true' : 'false');
+      c.classList.toggle('selected', match && selectedConcern !== 'noise_burning');
+      c.classList.toggle('hazard-selected', match && selectedConcern === 'noise_burning');
+    });
+
+    document.getElementById('hazardNote').classList.toggle('show', selectedConcern === 'noise_burning');
+    document.getElementById('otherConcernField').style.display = selectedConcern === 'others' ? 'block' : 'none';
+  };
+
+  card.addEventListener('click', selectCard);
+  card.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); selectCard(); } });
+});
+
+/* Digital Asset Pipeline Mechanics */
+const fileInput = document.getElementById('fileInput');
+const uploadBox = document.getElementById('uploadBox');
+
+fileInput.addEventListener('change', e => processingEngineFilePayload(e.target.files));
+uploadBox.addEventListener('dragover', e => { e.preventDefault(); uploadBox.classList.add('drag'); });
+uploadBox.addEventListener('dragleave', () => uploadBox.classList.remove('drag'));
+uploadBox.addEventListener('drop', e => { e.preventDefault(); uploadBox.classList.remove('drag'); processingEngineFilePayload(e.dataTransfer.files); });
+uploadBox.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { fileInput.click(); } });
+
+function resizeAndCompress(file, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => {
+        if (!blob) { reject(new Error('Compression failed')); return; }
+        const newName = file.name.replace(/\.\w+$/, '') + '.jpg';
+        resolve(new File([blob], newName, { type: 'image/jpeg' }));
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read image')); };
+    img.src = url;
+  });
+}
+
+async function compressImageIfNeeded(file, maxBytes = 2 * 1024 * 1024) {
+  if (file.size <= maxBytes) return file;
+
+  const attempts = [
+    { maxDim: 1600, quality: 0.8 },
+    { maxDim: 1400, quality: 0.7 },
+    { maxDim: 1200, quality: 0.6 },
+    { maxDim: 1000, quality: 0.5 },
+    { maxDim: 800,  quality: 0.4 },
+  ];
+
+  let lastResult = file;
+  for (const { maxDim, quality } of attempts) {
+    try {
+      const compressed = await resizeAndCompress(file, maxDim, quality);
+      lastResult = compressed;
+      if (compressed.size <= maxBytes) return compressed;
+    } catch (e) {
+      break;
+    }
+  }
+  return lastResult;
+}
+
+async function processingEngineFilePayload(targetList) {
+  clearUploadError();
+  const incoming = Array.from(targetList);
+
+  if (files.length + incoming.length > 5) {
+    setUploadError('You can only upload up to 5 photos maximum.');
+    return;
+  }
+
+  const uTitle = uploadBox.querySelector('.u-title');
+  const originalTitle = uTitle ? uTitle.textContent : '';
+  if (uTitle) uTitle.textContent = 'Processing photo(s)…';
+
+  try {
+    for (const f of incoming) {
+      let finalFile = f;
+      if (f.size > 2 * 1024 * 1024) {
+        try {
+          finalFile = await compressImageIfNeeded(f);
+        } catch (e) {
+          setUploadError(`We couldn't process "${f.name}". Please try a different photo.`);
+          continue;
+        }
+        if (finalFile.size > 2 * 1024 * 1024) {
+          setUploadError(`"${f.name}" is still too large even after compression. Please choose a smaller or lower-resolution photo.`);
+          continue;
+        }
+      }
+      files.push(finalFile);
+    }
+  } finally {
+    if (uTitle) uTitle.textContent = originalTitle || 'Click here to Open Camera or Choose Files';
+  }
+
+  renderFileManifestDOM();
+}
+
+function setUploadError(msg) { setInvalid('files', msg); uploadBox.classList.add('invalid'); }
+function clearUploadError() { clearInvalid('files'); uploadBox.classList.remove('invalid'); }
+
+function renderFileManifestDOM() {
+  const container = document.getElementById('fileList');
+  container.innerHTML = '';
+  files.forEach((f, idx) => {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(f);
+    img.onload = () => URL.revokeObjectURL(img.src);
+    img.alt = "Uploaded Preview Image Log";
+    
+    row.innerHTML = `
+      <img src="${img.src}" alt="Your attached photo">
+      <div class="meta">
+        <div class="n">${escapeHtml(f.name)}</div>
+        <div class="s">${(f.size/1024/1024).toFixed(2)} MB</div>
+      </div>
+    `;
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.innerHTML = '&times;';
+    delBtn.setAttribute('aria-label', 'Remove this photo');
+    delBtn.onclick = () => { files.splice(idx, 1); renderFileManifestDOM(); };
+    row.appendChild(delBtn);
+    container.appendChild(row);
+  });
+}
+
+/* Micro-Review Summary Matrix Engine Builder */
+function buildReviewSummary() {
+  const target = document.getElementById('reviewGrid');
+  const previewImages = files.map(f => `<img src="${URL.createObjectURL(f)}" alt="Review image attachment thumbnail">`).join('');
+  
+  target.innerHTML = `
+    <div class="review-group">
+      <div class="review-group-head"><span>Your Information</span><button type="button" class="review-edit" onclick="navigateToStep(1)">Change</button></div>
+      <div class="review-rows">
+        <div class="review-row"><dt>Account Number</dt><dd>${escapeHtml(document.getElementById('accountNumber').value)}</dd></div>
+        <div class="review-row"><dt>Full Name</dt><dd>${escapeHtml(document.getElementById('consumerName').value)}</dd></div>
+        <div class="review-row"><dt>Phone Number</dt><dd>${escapeHtml(document.getElementById('contactNumber').value)}</dd></div>
+      </div>
+    </div>
+    <div class="review-group">
+      <div class="review-group-head"><span>Meter Location</span><button type="button" class="review-edit" onclick="navigateToStep(2)">Change</button></div>
+      <div class="review-rows">
+        <div class="review-row"><dt>Meter Serial Number</dt><dd>${escapeHtml(document.getElementById('meterNumber').value)}</dd></div>
+        <div class="review-row"><dt>Address / Landmarks</dt><dd>${escapeHtml(document.getElementById('serviceAddress').value)}</dd></div>
+        <div class="review-row"><dt>Town & Barangay</dt><dd>${escapeHtml(document.getElementById('town').value)}, ${escapeHtml(document.getElementById('barangay').value)}</dd></div>
+      </div>
+    </div>
+    <div class="review-group">
+      <div class="review-group-head"><span>Problem Details</span><button type="button" class="review-edit" onclick="navigateToStep(3)">Change</button></div>
+      <div class="review-rows">
+        <div class="review-row"><dt>Problem Type Chosen</dt><dd>${CONCERN_LABELS[selectedConcern] || ''}</dd></div>
+        <div class="review-row"><dt>Date First Spotted</dt><dd>${document.getElementById('dateNoticed').value}</dd></div>
+      </div>
+    </div>
+    <div class="review-group">
+      <div class="review-group-head"><span>Photos Attached</span><button type="button" class="review-edit" onclick="navigateToStep(4)">Change</button></div>
+      <div class="review-thumbs">${previewImages || '<span style="font-size:14px;color:var(--gray-600);">No photos attached.</span>'}</div>
+    </div>
+  `;
+}
+
+/* System Communications API Post Handlers */
+let transmissionMutex = false;
+function submitTelemetryPayload() {
+  if (transmissionMutex) return;
+  if (!document.getElementById('confirmAccurate').checked) {
+    setInvalid('confirmAccurate', 'Please click the box to confirm that your answers are correct.');
+    return;
+  }
+
+  transmissionMutex = true;
+  const nextBtn = document.getElementById('nextBtn');
+  const spinner = document.getElementById('btnSpinner');
+  nextBtn.disabled = true;
+  if (spinner) spinner.classList.add('show');
+
+  const payload = new FormData();
+  payload.append('account_number', document.getElementById('accountNumber').value.trim());
+  payload.append('consumer_name', document.getElementById('consumerName').value.trim());
+  payload.append('contact_number', document.getElementById('contactNumber').value.trim());
+  payload.append('meter_number', document.getElementById('meterNumber').value.trim());
+  payload.append('service_address', document.getElementById('serviceAddress').value.trim());
+  payload.append('town', document.getElementById('town').value);
+  payload.append('barangay', document.getElementById('barangay').value);
+  payload.append('concern_type', selectedConcern);
+  payload.append('other_concern', document.getElementById('otherConcern').value.trim());
+  payload.append('date_noticed', document.getElementById('dateNoticed').value);
+  payload.append('additional_details', document.getElementById('additionalDetails').value.trim());
+  files.forEach(f => payload.append('files[]', f));
+
+  fetch('/api/meter-concern', { method: 'POST', body: payload })
+    .then(async res => {
+      let data = {};
+      try { data = await res.json(); } catch(e){}
+      if (!res.ok) {
+        const error = new Error(data.error || `We ran into a system communication issue (HTTP ${res.status}). Please try sending again.`);
+        error.status = res.status; error.payload = data;
+        throw error;
+      }
+      return data;
+    })
+    .then(data => {
+  document.getElementById('concernForm').style.display = 'none';
+  document.getElementById('stepperNav').style.display = 'none';
+  document.getElementById('introBanner').style.display = 'none';
+  document.querySelector('.action-bar').style.display = 'none';
+
+  const refId = data.reference_number || '—';
+  document.getElementById('refNumberOut').textContent = refId;
+
+  document.getElementById('messengerCTA').innerHTML = `
+    <div style="font-weight:700;color:#1e40af;font-size:14px;margin-bottom:6px;">
+        💬 Need to add details or have another concern?
+    </div>
+    <p style="font-size:13px;color:#1e3a8a;margin-bottom:12px;">
+        Chat with our ILECO-1 Messenger assistant anytime — quote
+        <strong>${escapeHtml(refId)}</strong> in a follow-up so we can pull up your report instantly.
+    </p>
+    <a href="${messengerLink('meter_' + refId)}" target="_blank" rel="noopener"
+       style="display:flex;align-items:center;justify-content:center;gap:8px;
+              background:#1877F2;color:#fff;text-decoration:none;font-weight:700;
+              padding:11px;border-radius:10px;font-size:14px;margin-bottom:8px;">
+        💬 Open Messenger Chat
+    </a>
+    <a href="${messengerLink('talk_to_agent')}" target="_blank" rel="noopener"
+       style="display:flex;align-items:center;justify-content:center;gap:8px;
+              background:#fff;color:#1877F2;text-decoration:none;font-weight:700;
+              padding:11px;border-radius:10px;font-size:14px;border:2px solid #1877F2;">
+        🧑‍💼 Chat with a Live Agent
+    </a>
+    <p style="font-size:11px;color:#64748b;margin-top:8px;text-align:center;">
+        Opens Facebook Messenger. If it doesn't open automatically, search
+        "ILECO-1" on Messenger and tap the chat.
+    </p>`;
+
+  document.getElementById('successPanel').classList.add('show');
+})
+    .catch(err => {
+      const errBox = document.getElementById('errAlert');
+      document.getElementById('errAlertText').textContent = err.message;
+      errBox.classList.add('show');
+      errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    })
+    .finally(() => {
+      transmissionMutex = false;
+      nextBtn.disabled = false;
+      if (spinner) spinner.classList.remove('show');
+      updateUIWizardControls();
+    });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+/* System Bootstrapper Runtime Context Routing */
+window.addEventListener('DOMContentLoaded', () => {
+  initializeGeographicControls();
+  document.getElementById('dateNoticed').max = new Date().toISOString().split('T')[0];
+  
+  document.getElementById('additionalDetails').addEventListener('input', function() {
+    document.getElementById('detailsCount').textContent = `${this.value.length} / 500`;
+  });
+  
+  if (window.innerWidth > 760) {
+    document.getElementById('accountNumber').focus({ preventScroll: true });
+  }
+});
+</script>
+</body>
+</html>

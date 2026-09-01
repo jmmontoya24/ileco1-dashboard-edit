@@ -1,0 +1,636 @@
+{% extends "base.html" %}
+{% block title %}ILECO-1 | {{ 'Edit Outage' if outage else 'Add Outage' }}{% endblock %}
+{% block nav_scheduled %}active{% endblock %}
+
+{% block head_css %}
+<style>
+:root {
+    --navy: #0f1c3f; --navy-mid: #162550; --navy-light: #1e3270;
+    --gold: #f5a623; --gold-light: #fbbf47;
+    --white: #ffffff; --smoke: #f4f6fb; --border: #dde3f0;
+    --text-dark: #0f1c3f; --text-mid: #4a5578; --text-light: #8892aa;
+    --green: #10b981; --green-bg: #d1fae5; --green-dark: #065f46;
+    --red: #ef4444; --red-bg: #fee2e2; --red-dark: #991b1b;
+    --shadow-sm: 0 1px 3px rgba(15,28,63,.08);
+    --shadow-md: 0 4px 16px rgba(15,28,63,.12);
+    --radius: 10px; --radius-lg: 16px;
+}
+
+/* ═══ PAGE BANNER ═══ */
+.page-banner {
+    background: linear-gradient(135deg, var(--navy-mid) 0%, var(--navy-light) 100%);
+    padding: 22px 28px;
+    border-bottom: 2px solid rgba(245,166,35,.25);
+    display: flex; align-items: center; gap: 14px;
+}
+.back-link {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 16px;
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: var(--radius);
+    color: #fff; font-size: 13px; font-weight: 700;
+    text-decoration: none; transition: all .2s; flex-shrink: 0;
+}
+.back-link:hover { background: rgba(255,255,255,.18); }
+.page-banner-title { font-size: 19px; font-weight: 800; color: #fff; }
+.page-banner-sub   { font-size: 13px; color: rgba(255,255,255,.55); margin-top: 3px; }
+
+/* ═══ ALERTS ═══ */
+.alerts-zone {
+    padding: 14px 28px 0;
+    max-width: 900px; margin: 0 auto; width: 100%;
+}
+.alert {
+    padding: 12px 16px; border-radius: var(--radius);
+    font-size: 13px; font-weight: 600; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+}
+.alert-success { background: var(--green-bg); color: var(--green-dark); border: 1px solid #a7f3d0; }
+.alert-danger   { background: var(--red-bg);   color: var(--red-dark);   border: 1px solid #fca5a5; }
+
+/* ═══ MAIN / FORM CONTAINER ═══ */
+.main {
+    flex: 1;
+    padding: 24px 28px;
+    display: flex;
+    justify-content: center;
+}
+.form-wrapper {
+    width: 100%;
+    max-width: 860px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ═══ CARD ═══ */
+.card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+.card-header {
+    background: var(--navy);
+    padding: 14px 22px;
+    display: flex; align-items: center; gap: 10px;
+}
+.card-header-icon  { font-size: 20px; }
+.card-header-title { font-size: 15px; font-weight: 700; color: #fff; }
+.card-header-sub   { font-size: 12px; color: rgba(255,255,255,.5); margin-top: 2px; }
+.card-body { padding: 22px; }
+
+/* ═══ FORM ELEMENTS ═══ */
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+}
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group.full { grid-column: 1 / -1; }
+
+label {
+    font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .5px;
+    color: var(--text-mid);
+}
+.field-hint {
+    font-size: 11px; color: var(--text-light);
+    font-weight: 400; text-transform: none; letter-spacing: 0;
+    margin-top: -3px;
+}
+
+input[type="date"],
+input[type="time"],
+input[type="text"],
+input[type="url"],
+textarea {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 13px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px; color: var(--text-dark);
+    background: var(--smoke);
+    transition: border-color .2s, box-shadow .2s;
+    outline: none;
+    width: 100%;
+}
+input:focus, textarea:focus {
+    border-color: var(--navy-light);
+    box-shadow: 0 0 0 3px rgba(30,50,112,.08);
+    background: #fff;
+}
+input[type="date"],
+input[type="time"] { font-family: 'DM Mono', monospace; font-size: 13px; }
+textarea { resize: vertical; min-height: 100px; line-height: 1.6; }
+
+/* ═══ TIME ROW ═══ */
+.time-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: end; }
+.time-sep-label {
+    text-align: center; font-size: 18px; color: var(--text-light);
+    padding-bottom: 10px; font-weight: 700;
+}
+.duration-display {
+    margin-top: 6px; padding: 6px 12px;
+    background: var(--blue-bg); color: var(--blue-dark);
+    border-radius: 8px; font-size: 12px; font-weight: 700;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: all .2s;
+}
+
+/* ═══ AREAS PILL PREVIEW ═══ */
+.areas-preview { display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px; }
+.area-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px;
+    background: var(--amber-bg); color: var(--amber-dark);
+    border-radius: 8px; font-size: 12px; font-weight: 700;
+}
+
+/* ═══ TOGGLE ═══ */
+.toggle-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 16px;
+    background: var(--smoke); border-radius: var(--radius);
+    border: 1.5px solid var(--border);
+    cursor: pointer; user-select: none; transition: border-color .2s;
+}
+.toggle-row:hover { border-color: var(--navy-light); }
+.toggle-switch {
+    width: 44px; height: 24px; border-radius: 12px;
+    background: var(--border); position: relative;
+    flex-shrink: 0; transition: background .2s;
+}
+.toggle-switch.on { background: var(--green); }
+.toggle-knob {
+    position: absolute; top: 3px; left: 3px;
+    width: 18px; height: 18px; border-radius: 50%; background: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,.2); transition: transform .2s;
+}
+.toggle-switch.on .toggle-knob { transform: translateX(20px); }
+.toggle-label-wrap { flex: 1; }
+.toggle-label-main { font-size: 14px; font-weight: 700; color: var(--text-dark); }
+.toggle-label-sub  { font-size: 12px; color: var(--text-light); margin-top: 2px; }
+.toggle-badge-on  { padding: 3px 10px; background: var(--green-bg); color: var(--green-dark); border-radius: 8px; font-size: 11px; font-weight: 700; }
+.toggle-badge-off { padding: 3px 10px; background: var(--smoke); color: var(--text-light); border-radius: 8px; font-size: 11px; font-weight: 700; border: 1px solid var(--border); }
+
+/* ═══ ACTION BAR ═══ */
+.action-bar {
+    display: flex; align-items: center; gap: 12px;
+    justify-content: flex-end; flex-wrap: wrap;
+}
+.btn-cancel {
+    padding: 11px 24px; background: var(--smoke); color: var(--text-mid);
+    border: 1.5px solid var(--border); border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 700;
+    cursor: pointer; text-decoration: none; transition: all .2s;
+    display: inline-flex; align-items: center; gap: 7px;
+}
+.btn-cancel:hover { background: var(--border); color: var(--text-dark); }
+.btn-save {
+    padding: 11px 28px;
+    background: var(--gold); color: var(--navy);
+    border: none; border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 800;
+    cursor: pointer; transition: all .2s;
+    display: inline-flex; align-items: center; gap: 8px;
+    box-shadow: 0 4px 14px rgba(245,166,35,.35);
+}
+.btn-save:hover { background: var(--gold-light); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(245,166,35,.45); }
+.btn-save:active { transform: none; }
+
+/* ═══ CHATBOT SNIPPET PREVIEW ═══ */
+.snippet-preview {
+    background: #f0f7ff; border: 1.5px solid #bfdbfe;
+    border-radius: var(--radius); padding: 14px 16px;
+    font-size: 13px; color: var(--text-mid); line-height: 1.7;
+    white-space: pre-wrap; font-family: 'DM Mono', monospace;
+    max-height: 200px; overflow-y: auto;
+}
+
+/* ═══ BLUE DURATION DISPLAY FIX — override red on valid ═══ */
+#durationDisplay { background: var(--blue-bg); color: var(--blue-dark); }
+
+@media (max-width: 700px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .form-group.full { grid-column: 1; }
+    .time-row { grid-template-columns: 1fr 1fr; }
+    .time-sep-label { display: none; }
+    .main { padding: 14px 16px; }
+    .page-banner { padding: 16px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ═══ PAGE BANNER ═══ -->
+<div class="page-banner">
+    <a href="{{ url_for('admin_outages') }}" class="back-link">← Back</a>
+    <div>
+        <div class="page-banner-title">
+            {{ '✏️ Edit Scheduled Outage' if outage else '➕ Add Scheduled Outage' }}
+        </div>
+        <div class="page-banner-sub">
+            {{ 'Update the advisory — changes are live immediately to the Rasa chatbot.' if outage
+               else 'New records are immediately available to the Rasa chatbot once saved.' }}
+        </div>
+    </div>
+</div>
+
+<!-- ═══ ALERTS ═══ -->
+<div class="alerts-zone">
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }}">
+        {% if category == 'success' %}✅{% else %}❌{% endif %} {{ message }}
+    </div>
+    {% endfor %}
+{% endwith %}
+</div>
+
+<!-- ═══ MAIN ═══ -->
+<main class="main">
+<div class="form-wrapper">
+
+<form method="POST" id="outageForm" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <!-- ── SECTION 1: WHEN ── -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-header-icon">🗓️</span>
+            <div>
+                <div class="card-header-title">Schedule</div>
+                <div class="card-header-sub">Date and duration of the interruption</div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+
+              <div class="form-group">
+    <label for="outage_date">📅 Date <span style="color:var(--text-light);font-weight:400;text-transform:none;">(optional)</span></label>
+    <input type="date" id="outage_date" name="outage_date"
+           value="{% if outage and outage.outage_date %}{{ outage.outage_date.strftime('%Y-%m-%d') }}{% endif %}">
+</div>
+
+<div class="form-group full">
+    <label>🕒 Time Range <span style="color:var(--text-light);font-weight:400;text-transform:none;">(optional)</span></label>
+    <div class="time-row">
+        <div>
+            <input type="time" id="start_time" name="start_time"
+                   value="{% if outage and outage.start_time %}{{ outage.start_time.strftime('%H:%M') }}{% endif %}"
+                   oninput="updateDuration()">
+        </div>
+        <div class="time-sep-label">→</div>
+        <div>
+            <input type="time" id="end_time" name="end_time"
+                   value="{% if outage and outage.end_time %}{{ outage.end_time.strftime('%H:%M') }}{% endif %}"
+                   oninput="updateDuration()">
+        </div>
+    </div>
+    <span class="duration-display" id="durationDisplay">
+        ⏱ Enter start &amp; end time to see duration (optional)
+    </span>
+</div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ── SECTION 2: WHAT ── -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-header-icon">🚧</span>
+            <div>
+                <div class="card-header-title">Reason &amp; Advisory</div>
+                <div class="card-header-sub">What the chatbot will tell consumers</div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+
+                <div class="form-group full">
+    <label for="reason">🚧 Reason <span style="color:var(--text-light);font-weight:400;text-transform:none;">(optional)</span></label>
+    <span class="field-hint">Leave blank if the advisory image already explains everything.</span>
+    <input type="text" id="reason" name="reason"
+           value="{{ outage.reason if outage else '' }}"
+           placeholder="e.g. Yearly preventive maintenance of Cabatuan Substation."
+           oninput="updatePreview()">
+</div>
+
+<div class="form-group full">
+    <label for="affected_areas">📍 Affected Areas <span style="color:var(--text-light);font-weight:400;text-transform:none;">(optional)</span></label>
+    <span class="field-hint">Leave blank to rely on the Towns field and image only.</span>
+    <textarea id="affected_areas" name="affected_areas"
+              rows="5"
+              placeholder="Cabatuan — Brgy. Bacan, Gaub, Aco&#10;Alimodian — Brgy. Gines, Poblacion"
+              oninput="updatePreview()">{% if outage %}{{ outage.affected_areas_text }}{% endif %}</textarea>
+    <div class="areas-preview" id="areasPreview"></div>
+</div>
+
+<div class="form-group">
+    <label for="towns">🏘️ Towns (comma separated) *</label>
+    <span class="field-hint">Required — the chatbot matches advisories to consumers by town.</span>
+    <input type="text" id="towns" name="towns"
+           value="{{ (outage.towns or []) | join(', ') if outage else '' }}"
+           placeholder="Cabatuan, Alimodian"
+           required
+           oninput="updatePreview()">
+</div>
+
+                <div class="form-group">
+    <label class="form-label">📸 Advisory Image <span style="color:var(--text-light);font-size:12px;">(optional — shown in chatbot)</span></label>
+
+    {% if outage and outage.image_url %}
+    <div style="margin-bottom:10px;">
+        <img src="{{ outage.image_url }}" alt="Current advisory image"
+             style="max-width:320px;border-radius:8px;border:1.5px solid var(--border);display:block;">
+        <p style="font-size:12px;color:var(--text-mid);margin-top:6px;">
+            ⬆️ Current image. Upload a new one to replace it.
+        </p>
+        <input type="hidden" name="existing_image_url" value="{{ outage.image_url }}">
+    </div>
+    {% endif %}
+
+    <input type="file" name="outage_image" id="outage_image"
+           accept="image/jpeg,image/png,image/webp"
+           style="display:none;"
+           onchange="previewOutageImage(this)">
+
+    <div id="imageDropZone"
+         onclick="document.getElementById('outage_image').click()"
+         style="
+             border: 2px dashed var(--border);
+             border-radius: var(--radius);
+             padding: 32px 20px;
+             text-align: center;
+             cursor: pointer;
+             background: var(--smoke);
+             transition: border-color .2s;
+         "
+         ondragover="this.style.borderColor='var(--navy-light)'"
+         ondragleave="this.style.borderColor='var(--border)'"
+         ondrop="handleImageDrop(event)">
+        <div style="font-size:32px;margin-bottom:8px;">🖼️</div>
+        <div style="font-weight:700;color:var(--text-dark);margin-bottom:4px;">
+            Click to upload or drag & drop
+        </div>
+        <div style="font-size:12px;color:var(--text-light);">
+            JPEG, PNG, WEBP — max 5MB
+        </div>
+    </div>
+
+    <div id="imagePreviewWrap" style="display:none;margin-top:10px;">
+        <img id="imagePreview"
+             style="max-width:320px;border-radius:8px;border:1.5px solid var(--border);display:block;">
+        <button type="button"
+                onclick="clearOutageImage()"
+                style="margin-top:8px;padding:5px 12px;border-radius:6px;
+                       border:1.5px solid var(--border);background:var(--red-bg);
+                       color:var(--red-dark);font-size:12px;font-weight:700;cursor:pointer;">
+            ✕ Remove
+        </button>
+    </div>
+</div>
+
+    </div>
+
+    <!-- ── SECTION 3: VISIBILITY ── -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-header-icon">📡</span>
+            <div>
+                <div class="card-header-title">Chatbot Visibility</div>
+                <div class="card-header-sub">Controls whether this record is served to the Rasa bot</div>
+            </div>
+        </div>
+        <div class="card-body">
+            <input type="hidden" name="is_active" id="is_active_hidden" value="0">
+            <div class="toggle-row" onclick="toggleActive()" id="toggleRow">
+                <div class="toggle-switch" id="toggleSwitch">
+                    <div class="toggle-knob"></div>
+                </div>
+                <div class="toggle-label-wrap">
+                    <div class="toggle-label-main">Active — visible to chatbot users</div>
+                    <div class="toggle-label-sub">When active, this advisory appears in chatbot responses for future dates.</div>
+                </div>
+                <span id="toggleBadge"></span>
+            </div>
+
+            <div style="margin-top:16px;padding:12px 14px;background:var(--smoke);border-radius:var(--radius);border:1px solid var(--border);">
+                <div style="font-size:11px;font-weight:700;color:var(--text-mid);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">🤖 Chatbot Message Preview</div>
+                <div class="snippet-preview" id="chatbotSnippet">Fill in the form above to see a preview…</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── ACTION BAR ── -->
+    <div class="action-bar">
+        <a href="{{ url_for('admin_outages') }}" class="btn-cancel">✕ Cancel</a>
+        <button type="submit" class="btn-save">
+            💾 {{ 'Save Changes' if outage else 'Add Outage' }}
+        </button>
+    </div>
+
+    <!-- JS reads this to set initial toggle state -->
+    <div id="js-config"
+         data-is-active="{{ 'true' if (not outage or outage.is_active) else 'false' }}"
+         style="display:none;"></div>
+
+</form>
+</div>
+</main>
+
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+/* ── TOGGLE ACTIVE ── */
+var _isActive = (document.getElementById('js-config').dataset.isActive === 'true');
+
+function toggleActive() {
+    _isActive = !_isActive;
+    var sw    = document.getElementById('toggleSwitch');
+    var badge = document.getElementById('toggleBadge');
+    var input = document.getElementById('is_active_hidden');
+    if (_isActive) {
+        sw.classList.add('on');
+        badge.innerHTML = '<span class="toggle-badge-on">✅ Active</span>';
+        input.name  = 'is_active';
+        input.value = 'on';
+    } else {
+        sw.classList.remove('on');
+        badge.innerHTML = '<span class="toggle-badge-off">🙈 Inactive</span>';
+        input.name  = '__skip';
+        input.value = '';
+    }
+    updatePreview();
+}
+
+/* ── INIT TOGGLE ── */
+(function() {
+    var sw    = document.getElementById('toggleSwitch');
+    var badge = document.getElementById('toggleBadge');
+    var input = document.getElementById('is_active_hidden');
+    if (_isActive) {
+        sw.classList.add('on');
+        badge.innerHTML = '<span class="toggle-badge-on">✅ Active</span>';
+        input.name  = 'is_active';
+        input.value = 'on';
+    } else {
+        badge.innerHTML = '<span class="toggle-badge-off">🙈 Inactive</span>';
+        input.name  = '__skip';
+        input.value = '';
+    }
+})();
+
+/* ── DURATION DISPLAY ── */
+function updateDuration() {
+    var s  = document.getElementById('start_time').value;
+    var e  = document.getElementById('end_time').value;
+    var el = document.getElementById('durationDisplay');
+    if (!s || !e) {
+        el.style.background = 'var(--blue-bg)';
+        el.style.color      = 'var(--blue-dark)';
+        el.textContent = '⏱ Enter start & end time to see duration';
+        return;
+    }
+    var sp   = s.split(':').map(Number);
+    var ep   = e.split(':').map(Number);
+    var diff = (ep[0]*60 + ep[1]) - (sp[0]*60 + sp[1]);
+    if (diff <= 0) {
+        el.style.background = 'var(--red-bg)';
+        el.style.color      = 'var(--red-dark)';
+        el.textContent = '⚠️ End time must be after start time';
+        return;
+    }
+    el.style.background = 'var(--blue-bg)';
+    el.style.color      = 'var(--blue-dark)';
+    var h = Math.floor(diff/60), m = diff%60;
+    el.textContent = '⏱ Duration: '
+        + (h ? h + ' hour' + (h !== 1 ? 's' : '') : '')
+        + (m ? (h ? ' ' : '') + m + ' minute' + (m !== 1 ? 's' : '') : '');
+    updatePreview();
+}
+
+/* ── AREAS PILL PREVIEW ── */
+function updateAreasPills() {
+    var lines = document.getElementById('affected_areas').value
+        .split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+    var el = document.getElementById('areasPreview');
+    el.innerHTML = lines.map(function(l) {
+        return '<span class="area-tag">' + escHtml(l.length > 50 ? l.slice(0,50)+'…' : l) + '</span>';
+    }).join('');
+}
+function previewOutageImage(input) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    if (file.size > 5 * 1024 * 1024) {
+        alert('Image too large. Maximum size is 5MB.');
+        input.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('imagePreview').src = e.target.result;
+        document.getElementById('imagePreviewWrap').style.display = 'block';
+        document.getElementById('imageDropZone').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+}
+
+function clearOutageImage() {
+    document.getElementById('outage_image').value = '';
+    document.getElementById('imagePreviewWrap').style.display = 'none';
+    document.getElementById('imageDropZone').style.display = 'block';
+}
+
+function handleImageDrop(e) {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    const input = document.getElementById('outage_image');
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    previewOutageImage(input);
+}
+
+function updatePreview() {
+    updateAreasPills();
+    var date   = document.getElementById('outage_date').value;
+    var start  = document.getElementById('start_time').value;
+    var end    = document.getElementById('end_time').value;
+    var reason = document.getElementById('reason').value.trim();
+    var towns  = document.getElementById('towns').value.trim();
+    var areas  = document.getElementById('affected_areas').value
+        .split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+
+    if (!towns) {
+        document.getElementById('chatbotSnippet').textContent = 'Enter at least a Town to see a preview…';
+        return;
+    }
+
+    var lines = ['⚠️ Scheduled Power Interruption', ''];
+
+    if (date) {
+        var d = new Date(date + 'T00:00:00');
+        lines.push('🗓️ Date: ' + d.toLocaleDateString('en-PH', {weekday:'long',year:'numeric',month:'long',day:'numeric'}));
+    }
+
+    if (start && end) {
+        var sp = start.split(':').map(Number);
+        var ep = end.split(':').map(Number);
+        var fmtT = function(h, m) {
+            var ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            return h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
+        };
+        var diff = (ep[0]*60+ep[1]) - (sp[0]*60+sp[1]);
+        var h    = Math.floor(diff/60);
+        lines.push('🕒 Time: ' + fmtT(sp[0],sp[1]) + ' – ' + fmtT(ep[0],ep[1]) + ' (' + h + ' hour' + (h !== 1 ? 's' : '') + ')');
+    }
+
+    if (reason) lines.push('🚧 Reason: ' + reason);
+
+    if (areas.length) {
+        lines.push('📍 Affected Areas:');
+        lines.push(areas.map(function(a){ return '• '+a; }).join('\n'));
+    }
+
+    if (lines.length === 2) {
+        lines.push('(No additional details — only the advisory image will be shown to consumers.)');
+    }
+
+    lines.push('');
+    lines.push('📞 Hotline: 09989893028');
+
+    document.getElementById('chatbotSnippet').textContent = lines.join('\n');
+}
+
+function escHtml(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── FORM SUBMIT: ensure Flask gets the is_active key correctly ── */
+document.getElementById('outageForm').addEventListener('submit', function() {
+    var input = document.getElementById('is_active_hidden');
+    if (_isActive) {
+        input.name  = 'is_active';
+        input.value = 'on';
+    } else {
+        input.name  = '__skip';
+        input.value = '';
+    }
+});
+
+/* ── INIT ── */
+document.addEventListener('DOMContentLoaded', function() {
+    updateDuration();
+    updatePreview();
+});
+</script>
+{% endblock %}

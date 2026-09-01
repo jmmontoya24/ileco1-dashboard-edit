@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ILECO-1 | Agent Queue</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+        --navy:#0f1c3f; --navy-mid:#162550; --navy-light:#1e3270;
+        --gold:#f5a623; --gold-light:#fbbf47; --white:#ffffff;
+        --smoke:#f4f6fb; --border:#dde3f0; --text-dark:#0f1c3f;
+        --text-mid:#4a5578; --text-light:#8892aa;
+        --green:#10b981; --green-bg:#d1fae5; --green-dark:#065f46;
+        --red:#ef4444; --red-bg:#fee2e2; --red-dark:#991b1b;
+        --amber:#f59e0b; --amber-bg:#fef3c7; --amber-dark:#92400e;
+        --blue:#3b82f6; --blue-bg:#dbeafe; --blue-dark:#1e40af;
+        --shadow-sm:0 1px 3px rgba(15,28,63,.08);
+        --shadow-md:0 4px 16px rgba(15,28,63,.12);
+        --shadow-lg:0 12px 40px rgba(15,28,63,.18);
+        --radius:10px; --radius-lg:16px;
+    }
+    html { font-size:15px; }
+    body { font-family:'DM Sans',sans-serif; background:var(--smoke); color:var(--text-dark); min-height:100vh; display:flex; flex-direction:column; }
+
+    /* ═══ SHARED HEADER ═══ */
+    .ileco-header {
+        background: #0f1c3f; height: 68px;
+        display: flex; align-items: center; padding: 0 28px;
+        position: sticky; top: 0; z-index: 1200;
+        box-shadow: 0 3px 24px rgba(0,0,0,.45);
+        border-bottom: 2px solid rgba(245,166,35,.25); gap: 0;
+    }
+    .ileco-brand { display:flex; align-items:center; gap:10px; font-weight:900; font-size:17px; letter-spacing:.4px; color:#fff; text-decoration:none; margin-right:24px; flex-shrink:0; white-space:nowrap; }
+    .ileco-brand .bolt { font-size:24px; filter:drop-shadow(0 0 8px rgba(251,191,36,.7)); }
+    .ileco-brand .accent { color:#f5a623; }
+    .ileco-nav { display:flex; gap:6px; flex:1; align-items:center; }
+    .ileco-nav-tab { display:flex; align-items:center; gap:8px; padding:10px 20px; border-radius:10px; border:none; background:transparent; color:rgba(255,255,255,.6); font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; transition:all .2s; position:relative; text-decoration:none; white-space:nowrap; }
+    .ileco-nav-tab:hover { background:rgba(255,255,255,.1); color:#fff; }
+    .ileco-nav-tab.active { background:#f5a623; color:#0f1c3f; box-shadow:0 4px 14px rgba(245,166,35,.35); }
+    .ileco-nav-tab .tab-icon { font-size:18px; }
+    .ileco-nav-badge { position:absolute; top:-7px; right:-7px; background:#ef4444; color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:12px; min-width:20px; text-align:center; line-height:1.4; display:none; box-shadow:0 2px 8px rgba(0,0,0,.35); animation:badge-pop 2s infinite; }
+    @keyframes badge-pop { 0%,100%{transform:scale(1)} 50%{transform:scale(1.18)} }
+    .ileco-header-right { display:flex; align-items:center; gap:10px; margin-left:auto; flex-shrink:0; }
+    .ileco-live-pill { display:flex; align-items:center; gap:6px; padding:6px 13px; border-radius:20px; background:rgba(16,185,129,.15); color:#10b981; font-size:12px; font-weight:700; border:1px solid rgba(16,185,129,.3); white-space:nowrap; }
+    .ileco-live-pill.offline { background:rgba(239,68,68,.12); color:#ef4444; border-color:rgba(239,68,68,.3); }
+    .ileco-live-dot { width:8px; height:8px; border-radius:50%; background:currentColor; animation:live-blink 2s infinite; }
+    @keyframes live-blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+    .ileco-user-widget { position:relative; }
+    .ileco-user-btn { display:flex; align-items:center; gap:9px; padding:6px 13px 6px 6px; background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.14); border-radius:28px; cursor:pointer; transition:all .2s; font-family:inherit; }
+    .ileco-user-btn:hover { background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.24); }
+    .ileco-user-avatar { width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#f5a623,#f59e0b); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:900; color:#0f1c3f; text-transform:uppercase; flex-shrink:0; }
+    .ileco-user-info { text-align:left; line-height:1.2; }
+    .ileco-user-name { font-size:13px; font-weight:700; color:#fff; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ileco-user-role { font-size:10px; color:rgba(255,255,255,.5); text-transform:uppercase; letter-spacing:.5px; font-weight:600; }
+    .ileco-user-caret { font-size:10px; color:rgba(255,255,255,.45); transition:transform .2s; }
+    .ileco-user-dropdown { display:none; position:absolute; top:calc(100% + 10px); right:0; width:230px; background:#fff; border-radius:14px; box-shadow:0 10px 48px rgba(0,0,0,.22); border:1px solid #e5e7eb; z-index:3000; overflow:hidden; animation:dd-in .15s ease; }
+    .ileco-user-dropdown.open { display:block; }
+    @keyframes dd-in { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+    .ud-head { background:linear-gradient(135deg,#0f1c3f,#1e3270); padding:18px; text-align:center; }
+    .ud-avatar-lg { width:54px; height:54px; border-radius:50%; background:linear-gradient(135deg,#f5a623,#f59e0b); display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:900; color:#0f1c3f; margin:0 auto 10px; text-transform:uppercase; box-shadow:0 4px 14px rgba(0,0,0,.3); }
+    .ud-name { font-size:15px; font-weight:800; color:#fff; }
+    .ud-role { font-size:11px; color:rgba(255,255,255,.5); margin-top:3px; text-transform:uppercase; font-weight:600; }
+    .ud-menu { padding:8px; }
+    .ud-item { display:flex; align-items:center; gap:10px; padding:10px 13px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; color:#374151; text-decoration:none; border:none; background:none; width:100%; font-family:inherit; transition:background .15s; }
+    .ud-item:hover { background:#f3f4f6; color:#111827; }
+    .ud-item.danger { color:#dc2626; }
+    .ud-item.danger:hover { background:#fee2e2; }
+    .ud-divider { height:1px; background:#f3f4f6; margin:4px 8px; }
+    .ileco-logout-overlay { display:none; position:fixed; inset:0; background:rgba(15,28,63,.65); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center; }
+    .ileco-logout-overlay.show { display:flex; }
+    .ileco-logout-box { background:#fff; border-radius:18px; padding:36px; max-width:380px; width:90%; text-align:center; box-shadow:0 24px 72px rgba(0,0,0,.32); animation:dd-in .2s ease; }
+    .lo-icon { font-size:52px; margin-bottom:14px; }
+    .lo-title { font-size:22px; font-weight:800; color:#0f1c3f; margin-bottom:8px; }
+    .lo-sub { font-size:14px; color:#6b7280; margin-bottom:28px; line-height:1.6; }
+    .lo-btns { display:flex; gap:14px; justify-content:center; }
+    .lo-btn-cancel { padding:12px 26px; background:#f3f4f6; color:#374151; border:none; border-radius:9px; font-weight:700; cursor:pointer; font-size:14px; font-family:inherit; }
+    .lo-btn-confirm { padding:12px 26px; background:linear-gradient(135deg,#dc2626,#b91c1c); color:#fff; border:none; border-radius:9px; font-weight:700; cursor:pointer; font-size:14px; text-decoration:none; display:inline-flex; align-items:center; gap:7px; }
+
+    /* ── KPI strip ── */
+    .kpi-strip { background:var(--navy-mid); padding:16px 28px; display:grid; grid-template-columns:repeat(5,1fr); gap:12px; border-bottom:2px solid rgba(245,166,35,.25); }
+    .kpi-card { background:rgba(255,255,255,.06); border-radius:var(--radius); padding:14px 16px; display:flex; align-items:center; gap:12px; border:1px solid rgba(255,255,255,.07); transition:background .2s; }
+    .kpi-card:hover { background:rgba(255,255,255,.1); }
+    .kpi-icon { font-size:24px; width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .kpi-icon.q{background:rgba(245,166,35,.15);} .kpi-icon.p{background:rgba(59,130,246,.15);} .kpi-icon.s{background:rgba(16,185,129,.15);} .kpi-icon.c{background:rgba(239,68,68,.15);} .kpi-icon.w{background:rgba(139,92,246,.15);}
+    .kpi-val { font-size:26px; font-weight:800; color:var(--gold); line-height:1; font-variant-numeric:tabular-nums; }
+    .kpi-lbl { font-size:11px; font-weight:600; color:rgba(255,255,255,.55); text-transform:uppercase; letter-spacing:.5px; margin-top:2px; }
+
+    .main { flex:1; padding:20px 28px; display:flex; flex-direction:column; gap:16px; }
+    .toolbar { background:var(--white); border-radius:var(--radius); padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; box-shadow:var(--shadow-sm); border:1px solid var(--border); }
+    .toolbar-label { font-size:12px; font-weight:600; color:var(--text-mid); text-transform:uppercase; letter-spacing:.5px; flex-shrink:0; }
+    .filter-select,.search-input,.date-input { border:1.5px solid var(--border); border-radius:7px; padding:7px 11px; font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text-dark); background:var(--smoke); transition:border-color .2s,box-shadow .2s; outline:none; }
+    .filter-select:focus,.search-input:focus,.date-input:focus { border-color:var(--navy-light); box-shadow:0 0 0 3px rgba(30,50,112,.08); }
+    .search-input { flex:1; min-width:200px; }
+    .btn { padding:7px 14px; border-radius:7px; border:none; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:5px; }
+    .btn-primary { background:var(--navy); color:#fff; }
+    .btn-primary:hover { background:var(--navy-light); }
+    .btn-ghost { background:var(--smoke); color:var(--text-mid); border:1.5px solid var(--border); }
+    .btn-ghost:hover { background:var(--border); color:var(--text-dark); }
+    .toolbar-spacer { flex:1; }
+    .panel { background:var(--white); border-radius:var(--radius-lg); box-shadow:var(--shadow-md); border:1px solid var(--border); overflow:hidden; flex:1; }
+    .panel-header { background:var(--navy); padding:14px 20px; display:flex; align-items:center; justify-content:space-between; }
+    .panel-title { font-size:15px; font-weight:700; color:var(--white); display:flex; align-items:center; gap:8px; }
+    .panel-subtitle { font-size:12px; color:rgba(255,255,255,.55); font-weight:400; }
+    .panel-actions { display:flex; gap:8px; align-items:center; }
+    .table-wrap { overflow-x:auto; overflow-y:auto; max-height:580px; }
+    .table-wrap::-webkit-scrollbar{width:8px;height:8px;} .table-wrap::-webkit-scrollbar-track{background:var(--smoke);} .table-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;} .table-wrap::-webkit-scrollbar-thumb:hover{background:#c0c8da;}
+    .data-table { width:100%; border-collapse:collapse; }
+    .data-table thead { position:sticky; top:0; z-index:5; background:var(--smoke); }
+    .data-table th { padding:10px 14px; text-align:left; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--text-mid); border-bottom:2px solid var(--border); white-space:nowrap; }
+    .data-table td { padding:12px 14px; font-size:13px; color:var(--text-dark); border-bottom:1px solid var(--border); vertical-align:middle; }
+    .data-table tbody tr { transition:background .15s; }
+    .data-table tbody tr:hover { background:#f0f4ff; cursor:pointer; }
+    .data-table tbody tr:last-child td { border-bottom:none; }
+    .data-table tbody tr.is-critical { border-left:3px solid var(--red); }
+    .data-table tbody tr.is-pending { background:#fffdf0; }
+    .queue-pos { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:50%; background:var(--navy); color:var(--gold); font-weight:800; font-size:12px; font-family:'DM Mono',monospace; }
+    .queue-pos.resolved { background:var(--border); color:var(--text-light); }
+    .name-cell { display:flex; flex-direction:column; gap:1px; }
+    .name-main { font-weight:600; font-size:13px; color:var(--text-dark); }
+    .name-sub { font-size:11px; color:var(--text-light); font-family:'DM Mono',monospace; }
+    .badge { display:inline-flex; align-items:center; gap:4px; padding:4px 9px; border-radius:20px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; white-space:nowrap; }
+    .badge-pending{background:var(--amber-bg);color:var(--amber-dark);} .badge-resolved{background:var(--green-bg);color:var(--green-dark);} .badge-critical{background:var(--red-bg);color:var(--red-dark);animation:pulse-red 2s infinite;} .badge-high{background:var(--amber-bg);color:var(--amber-dark);} .badge-medium{background:var(--green-bg);color:var(--green-dark);} .badge-low{background:var(--blue-bg);color:var(--blue-dark);}
+    @keyframes pulse-red{0%,100%{opacity:1}50%{opacity:.7}}
+    .wait-time { font-family:'DM Mono',monospace; font-size:12px; color:var(--text-mid); }
+    .wait-time.long{color:var(--red);font-weight:600;} .wait-time.medium-wait{color:var(--amber);font-weight:600;}
+    .served-time { font-family:'DM Mono',monospace; font-size:11px; color:var(--green); font-weight:600; }
+
+    /* ── Served-by pill ── */
+    .served-by-pill {
+        display:inline-flex; align-items:center; gap:5px;
+        padding:3px 10px;
+        background:var(--green-bg);
+        color:var(--green-dark);
+        border-radius:10px;
+        font-size:11px; font-weight:700;
+        margin-top:3px;
+        white-space:nowrap;
+        max-width:180px;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+
+    .act-btn { padding:5px 10px; border-radius:6px; border:none; font-family:'DM Sans',sans-serif; font-size:11px; font-weight:700; cursor:pointer; transition:all .2s; display:inline-flex; align-items:center; gap:4px; }
+    .act-btn.serve{background:var(--green);color:#fff;} .act-btn.serve:hover{background:#059669;transform:translateY(-1px);}
+    .act-btn.view{background:var(--blue-bg);color:var(--blue-dark);} .act-btn.view:hover{background:#bfdbfe;}
+    .act-btn.remove{background:var(--red-bg);color:var(--red-dark);} .act-btn.remove:hover{background:#fecaca;}
+    .act-btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important;}
+    .empty-state{padding:60px 20px;text-align:center;} .empty-icon{font-size:48px;margin-bottom:12px;} .empty-title{font-size:16px;font-weight:700;color:var(--text-mid);margin-bottom:4px;} .empty-sub{font-size:13px;color:var(--text-light);}
+    .loading-row td{padding:40px;text-align:center;color:var(--text-light);font-style:italic;}
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,28,63,.55);backdrop-filter:blur(3px);z-index:2000;align-items:center;justify-content:center;} .modal-overlay.show{display:flex;}
+    .modal-box{background:var(--white);border-radius:var(--radius-lg);width:90%;max-width:580px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:modal-in .2s ease;}
+    @keyframes modal-in{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+    .modal-header{background:var(--navy);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;border-radius:var(--radius-lg) var(--radius-lg) 0 0;}
+    .modal-title{font-size:16px;font-weight:700;color:var(--white);}
+    .modal-close{background:rgba(255,255,255,.1);border:none;color:#fff;width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background .2s;} .modal-close:hover{background:rgba(255,255,255,.2);}
+    .modal-body{padding:22px;}
+    .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .detail-card{background:var(--smoke);border-radius:8px;padding:12px 14px;border:1px solid var(--border);} .detail-card.full{grid-column:1/-1;}
+    .detail-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-light);margin-bottom:4px;}
+    .detail-val{font-size:14px;font-weight:600;color:var(--text-dark);}
+    .modal-footer{padding:16px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+    .toast-container{position:fixed;top:80px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+    .toast{padding:12px 18px;border-radius:9px;font-size:13px;font-weight:600;box-shadow:var(--shadow-md);animation:toast-in .25s ease;max-width:360px;display:flex;align-items:center;gap:8px;}
+    @keyframes toast-in{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+    .toast.success{background:var(--green);color:#fff;} .toast.error{background:var(--red);color:#fff;} .toast.info{background:var(--navy);color:#fff;} .toast.warn{background:var(--amber);color:var(--navy);}
+    .summary-bar{background:linear-gradient(90deg,var(--navy) 0%,var(--navy-light) 100%);border-radius:var(--radius);padding:12px 18px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+    .summary-label{font-size:12px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.5px;}
+    .summary-stat{display:flex;align-items:center;gap:6px;} .summary-stat-num{font-size:18px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;} .summary-stat-lbl{font-size:11px;color:rgba(255,255,255,.6);font-weight:500;}
+    .summary-divider{width:1px;height:24px;background:rgba(255,255,255,.15);}
+
+    /* ── "Served by me" highlight ── */
+    .data-table tbody tr.served-by-me td:last-child::after {
+        content: ''; /* no-op — handled via JS class */
+    }
+    .agent-self-pill {
+        display:inline-flex; align-items:center; gap:4px;
+        padding:2px 7px;
+        background:linear-gradient(135deg,#d1fae5,#a7f3d0);
+        color:#065f46;
+        border-radius:8px;
+        font-size:10px; font-weight:800;
+        border:1px solid #6ee7b7;
+        margin-left:4px;
+        vertical-align:middle;
+    }
+
+    @media(max-width:900px){.kpi-strip{grid-template-columns:repeat(3,1fr);}.detail-grid{grid-template-columns:1fr;}}
+    @media(max-width:600px){.kpi-strip{grid-template-columns:repeat(2,1fr);padding:12px 16px;}.ileco-header{padding:0 16px;}.main{padding:12px 16px;}}
+    </style>
+</head>
+<body>
+
+<!-- ═══ SHARED HEADER ═══ -->
+<header class="ileco-header">
+    <a href="/dashboard" class="ileco-brand">
+    <img src="/static/images/ileco1_logo.png" 
+         alt="ILECO-1" 
+         style="width:52px; height:52px; object-fit:contain; border-radius:8px; flex-shrink:0;">
+    <span>ILECO<span class="accent">-1</span></span>
+</a>
+    <nav class="ileco-nav">
+    <a href="/dashboard"       class="ileco-nav-tab" id="navOutages">
+        <span class="tab-icon">⚡</span> Outage Management Dashboard
+        <span class="ileco-nav-badge" id="outagesBadge">0</span>
+    </a>
+    <a href="/admin/outages"   class="ileco-nav-tab" id="navScheduled">
+        <span class="tab-icon">📅</span> Scheduled Outages
+        <span class="ileco-nav-badge" id="scheduledBadge">0</span>
+    </a>
+    <a href="/meter_dashboard" class="ileco-nav-tab" id="navMeter">
+        <span class="tab-icon">🔧</span> Meter Monitoring Dashboard
+        <span class="ileco-nav-badge" id="meterBadge">0</span>
+    </a>
+    <a href="/agent_queue"     class="ileco-nav-tab active" id="navQueue">
+        <span class="tab-icon">💬</span> Service Desk Operations Dashboard
+        <span class="ileco-nav-badge" id="queueBadge">0</span>
+    </a>
+    <a href="/spam_monitor" class="ileco-nav-tab" id="navSpam">
+    <span class="tab-icon">🛡️</span> Spam Monitor
+    <span class="ileco-nav-badge" id="spamBadge">0</span>
+    </a>
+          <a href="/feature_flags" class="ileco-nav-tab" id="navFlags">
+    <span class="tab-icon">🎛️</span> Feature Flags
+</a>
+</nav>
+    </nav>
+    <div class="ileco-header-right">
+        <div class="ileco-live-pill" id="livePill">
+            <span class="ileco-live-dot"></span>
+            <span id="livePillLabel">Connecting…</span>
+        </div>
+        <div class="ileco-user-widget" id="userWidget">
+            <button class="ileco-user-btn" id="userBtn" onclick="toggleUserDropdown()">
+                <div class="ileco-user-avatar" id="headerAvatar">?</div>
+                <div class="ileco-user-info">
+                    <div class="ileco-user-name" id="headerUsername">Loading…</div>
+                    <div class="ileco-user-role" id="headerRole">staff</div>
+                </div>
+                <span class="ileco-user-caret" id="userCaret">▼</span>
+            </button>
+            <div class="ileco-user-dropdown" id="userDropdown">
+                <div class="ud-head">
+                    <div class="ud-avatar-lg" id="ddAvatar">?</div>
+                    <div class="ud-name" id="ddName">Loading…</div>
+                    <div class="ud-role" id="ddRole">staff</div>
+                </div>
+                <div class="ud-menu">
+                    <a href="/user_management" class="ud-item" id="ddUserMgmt" style="display:none;">
+                        <span>👥</span> User Management
+                    </a>
+                    <div class="ud-divider"></div>
+                    <button class="ud-item danger" onclick="showLogout()">
+                        <span>🚪</span> Sign Out
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- Logout overlay -->
+<div class="ileco-logout-overlay" id="logoutOverlay">
+    <div class="ileco-logout-box">
+        <div class="lo-icon">🚪</div>
+        <div class="lo-title">Sign Out?</div>
+        <div class="lo-sub">Signed in as <strong id="logoutUserName"></strong>.<br>All unsaved data will be lost.</div>
+        <div class="lo-btns">
+            <button class="lo-btn-cancel" onclick="hideLogout()">Cancel</button>
+            <a class="lo-btn-confirm" href="/logout">🚪 Yes, Sign Out</a>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ KPI STRIP ═══ -->
+<section class="kpi-strip">
+    <div class="kpi-card"><div class="kpi-icon q">👥</div><div><div class="kpi-val" id="kpiTotal">—</div><div class="kpi-lbl">Total Queue</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon p">⏳</div><div><div class="kpi-val" id="kpiPending">—</div><div class="kpi-lbl">Pending</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon s">✅</div><div><div class="kpi-val" id="kpiServedToday">—</div><div class="kpi-lbl">Served Today</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon c">🚨</div><div><div class="kpi-val" id="kpiCritical">—</div><div class="kpi-lbl">Critical</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon w">⏱️</div><div><div class="kpi-val" id="kpiAvgWait">—</div><div class="kpi-lbl">Avg Wait</div></div></div>
+</section>
+
+<main class="main">
+    <div class="summary-bar">
+        <span class="summary-label">📅 Today's Summary</span>
+        <div class="summary-stat"><span class="summary-stat-num" id="sumTotal">0</span><span class="summary-stat-lbl">Total Queued</span></div>
+        <div class="summary-divider"></div>
+        <div class="summary-stat"><span class="summary-stat-num" id="sumServed">0</span><span class="summary-stat-lbl">Served</span></div>
+        <div class="summary-divider"></div>
+        <div class="summary-stat"><span class="summary-stat-num" id="sumPending">0</span><span class="summary-stat-lbl">Still Waiting</span></div>
+        <div class="summary-divider"></div>
+        <div class="summary-stat"><span class="summary-stat-num" id="sumCritical">0</span><span class="summary-stat-lbl">Critical</span></div>
+        <div class="summary-divider"></div>
+        <div class="summary-stat"><span class="summary-stat-num" id="sumServeRate">—%</span><span class="summary-stat-lbl">Serve Rate</span></div>
+    </div>
+
+    <div class="toolbar">
+        <span class="toolbar-label">Filters:</span>
+        <select class="filter-select" id="statusFilter" onchange="applyFilters()">
+            <option value="all">All Status</option>
+            <option value="Pending">Pending</option>
+            <option value="Resolved">Resolved</option>
+        </select>
+        <select class="filter-select" id="priorityFilter" onchange="applyFilters()">
+            <option value="all">All Priority</option>
+            <option value="critical">🚨 Critical</option>
+            <option value="high">🔴 High</option>
+            <option value="medium">🟡 Medium</option>
+            <option value="low">🔵 Low</option>
+        </select>
+        <input type="date" class="date-input" id="dateFilter" onchange="applyFilters()">
+        <input type="text" class="search-input" id="searchInput" placeholder="🔍  Search name, contact, concern…">
+        <div class="toolbar-spacer"></div>
+        <button class="btn btn-ghost" onclick="clearFilters()">✕ Clear</button>
+<button class="btn" style="background:#10b981;color:#fff;" onclick="exportQueueCSV()">⬇ Export CSV</button>
+<button class="btn btn-primary" onclick="serveNext()">▶ Serve Next</button>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <div>
+                <div class="panel-title">💬 Customer Service Queue</div>
+                <div class="panel-subtitle" id="tableSubtitle">Loading…</div>
+            </div>
+            <div class="panel-actions">
+                <span style="font-size:12px;color:rgba(255,255,255,.5);" id="lastRefreshed">—</span>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Customer</th>
+                        <th>Concern</th>
+                        <th>Priority</th>
+                        <th>Wait / Response Time</th>
+                        <th>Status</th>
+                        <th>Served At / By</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr class="loading-row"><td colspan="8">⏳ Loading queue data…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Detail modal -->
+<div class="modal-overlay" id="detailModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <span class="modal-title" id="modalTitle">Customer Details</span>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body"><div class="detail-grid" id="modalGrid"></div></div>
+        <div class="modal-footer" id="modalFooter"></div>
+    </div>
+</div>
+
+<script>
+    /* ═══════════════════════════════════════════════════
+   CSRF — auto-attach token to every same-origin
+   POST/PUT/DELETE fetch() call made from this page.
+   Without this, /serve and /remove are rejected by the
+   backend's csrf_protect_routes() before-request hook,
+   which returns a non-JSON error page — that response
+   then fails resp.json() and surfaces as a generic
+   "Network error" instead of the real CSRF rejection.
+═══════════════════════════════════════════════════ */
+(function(){
+    'use strict';
+    var _csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    var _origFetch = window.fetch;
+
+    window.fetch = function(input, init) {
+        init = init || {};
+        var method = (init.method || 'GET').toUpperCase();
+        var needsToken = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
+
+        var url = typeof input === 'string' ? input : (input && input.url) || '';
+        var isSameOrigin = url.startsWith('/') || url.startsWith(window.location.origin);
+
+        if (needsToken && isSameOrigin && _csrfToken) {
+            init.headers = Object.assign({}, init.headers, { 'X-CSRFToken': _csrfToken });
+        }
+        return _origFetch(input, init);
+    };
+})();
+/* ═══════════════════════════════════════════════════
+   SESSION USER
+   - Loaded once from /api/me on page load
+   - SESSION_USER_NAME is used as the served_by value
+   - Never prompt(), never manual input
+═══════════════════════════════════════════════════ */
+var SESSION_USER_NAME = '';
+var SESSION_USER_LOADED = false;
+
+async function ensureSessionUser() {
+    if (SESSION_USER_LOADED) return;
+    try {
+        var res = await fetch('/api/me', { credentials: 'same-origin' });
+        var d   = await res.json();
+        if (d.success) {
+            SESSION_USER_NAME   = d.user.full_name || d.user.username || 'Agent';
+            SESSION_USER_LOADED = true;
+        }
+    } catch(e) {
+        console.warn('Could not load session user:', e);
+    }
+}
+
+/* ═══════════════════════════════════════════════════
+   SHARED HEADER LOGIC
+═══════════════════════════════════════════════════ */
+(function(){
+    'use strict';
+    function $(id){return document.getElementById(id);}
+    function setText(id,t){var el=$(id);if(el)el.textContent=t;}
+    function getInitials(n){var p=(n||'').trim().split(/\s+/);return p.length>=2?(p[0][0]+p[p.length-1][0]).toUpperCase():(n||'?').substring(0,2).toUpperCase();}
+    function setBadge(id,n){var el=$(id);if(!el)return;el.textContent=n;el.style.display=n>0?'block':'none';}
+
+    async function loadUser(){
+        try{
+            var res=await fetch('/api/me',{credentials:'same-origin'});
+            var d=await res.json();
+            if(!d.success)return;
+            var u=d.user,name=u.full_name||u.username||'?',role=u.role||'staff',ini=getInitials(name);
+            window.CURRENT_USER_ROLE = role;
+            setText('headerAvatar',ini);setText('headerUsername',name);setText('headerRole',role);
+            setText('ddAvatar',ini);setText('ddName',name);setText('ddRole',role);
+            setText('logoutUserName',name);
+            /* Populate SESSION_USER_NAME at the same time — avoids a second /api/me call */
+            if(!SESSION_USER_LOADED){SESSION_USER_NAME=name;SESSION_USER_LOADED=true;}
+            if(role==='admin'||role==='superadmin'){var m=$('ddUserMgmt');if(m)m.style.display='flex';}
+        }catch(e){}
+    }
+    async function loadBadges(){
+        try{
+            var res=await fetch('/api/badge_counts',{credentials:'same-origin'});
+            var d=await res.json();
+            if(!d.success)return;
+            setBadge('outagesBadge',d.counts.outages);
+            setBadge('meterBadge',d.counts.meter);
+            setBadge('spamBadge', d.counts.spam || 0);
+        }catch(e){}
+    }
+    window.toggleUserDropdown=function(){var dd=$('userDropdown'),c=$('userCaret');if(!dd)return;var open=dd.classList.toggle('open');if(c)c.style.transform=open?'rotate(180deg)':'';};
+    window.showLogout=function(){var o=$('logoutOverlay');if(o)o.classList.add('show');var dd=$('userDropdown');if(dd)dd.classList.remove('open');};
+    window.hideLogout=function(){var o=$('logoutOverlay');if(o)o.classList.remove('show');};
+    window.setLiveStatus=function(on){var p=$('livePill'),l=$('livePillLabel');if(!p||!l)return;p.className='ileco-live-pill'+(on?'':' offline');l.textContent=on?'Live':'Offline';};
+    window.headerRefreshBadges=loadBadges;
+    document.addEventListener('click',function(e){var uw=$('userWidget');if(uw&&!uw.contains(e.target)){var dd=$('userDropdown');if(dd)dd.classList.remove('open');var c=$('userCaret');if(c)c.style.transform='';}});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'){hideLogout();var dd=$('userDropdown');if(dd)dd.classList.remove('open');}});
+    function init(){loadUser();loadBadges();setInterval(loadBadges,30000);}
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
+
+/* ═══════════════════════════════════════════════════
+   QUEUE LOGIC
+═══════════════════════════════════════════════════ */
+var socket=null, allItems=[], isRefreshing=false, _refreshGuard=null, refreshTimer=null;
+var _queueDebounce=null;
+function debouncedRefresh(){clearTimeout(_queueDebounce);_queueDebounce=setTimeout(refreshData,400);}
+
+function waitMinutes(iso) {
+    if (!iso) return 0;
+    var ms = Date.now() - new Date(iso).getTime();
+    // Guard: if ms is negative the timestamp is in the future
+    // (clock skew or missing TZ offset) — treat as 0 minutes
+    return ms > 0 ? Math.floor(ms / 60000) : 0;
+}
+
+function formatWait(iso) {
+    var m = waitMinutes(iso);
+    if (m < 1)  return '< 1m';
+    if (m < 60) return m + 'm';
+    return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
+}
+function formatResponseTime(t, s) {
+    if (!t || !s) return null;
+    var ms = new Date(s) - new Date(t);
+    if (isNaN(ms) || ms <= 0) return null;   // changed < 0 to <= 0
+    var m = Math.floor(ms / 60000);
+    return {
+        minutes: m,
+        display: m < 1  ? '< 1 minute'
+                : m < 60 ? m + ' minutes'
+                : Math.floor(m / 60) + 'h ' + m % 60 + 'm',
+        cssClass: m > 30 ? 'color:var(--red);font-weight:700;'
+                : m > 15 ? 'color:var(--amber);font-weight:700;'
+                :           'color:var(--green);font-weight:700;'
+    };
+}
+function formatDateTime(iso){if(!iso)return '—';return new Date(iso).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});}
+function formatTime(iso){if(!iso)return '—';return new Date(iso).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true});}
+function isSameLocalDay(iso){if(!iso)return false;var d=new Date(iso),now=new Date();return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()&&d.getDate()===now.getDate();}
+
+function initSocket(){
+    socket=io({
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        transports: ['websocket', 'polling'],
+        upgrade: true
+    });
+    socket.on('connect',()=>{window.setLiveStatus(true);isRefreshing=false;clearTimeout(_refreshGuard);refreshData();});
+    socket.on('disconnect',()=>window.setLiveStatus(false));
+    socket.on('connect_error',()=>window.setLiveStatus(false));
+    socket.on('queue_updated',debouncedRefresh);
+    socket.on('new_queue_item',(d)=>{showToast('🔔 New: '+(d.full_name||'Customer')+' joined the queue','info');debouncedRefresh();});
+}
+
+async function refreshData(){
+    if(isRefreshing)return;isRefreshing=true;clearTimeout(_refreshGuard);_refreshGuard=setTimeout(()=>{isRefreshing=false;},10000);
+    try{
+        var status=document.getElementById('statusFilter').value,
+            priority=document.getElementById('priorityFilter').value,
+            date=document.getElementById('dateFilter').value;
+        var p=new URLSearchParams();
+        if(status!=='all')p.append('status',status);
+        if(priority!=='all')p.append('priority',priority);
+        if(date)p.append('date',date);
+        var res=await fetch('/api/agent_queue?'+p,{credentials:'same-origin'});
+        var data=await res.json();
+        if(!data.success)throw new Error(data.error||'Fetch failed');
+        allItems=data.data||[];
+        renderTable(applySearch(allItems));
+        updateKPIs();
+        document.getElementById('lastRefreshed').textContent='Updated '+new Date().toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true});
+    }catch(e){
+        showToast('❌ Failed to load queue: '+e.message,'error');
+        renderEmpty('Connection error. Retrying…');
+    }finally{
+        clearTimeout(_refreshGuard);isRefreshing=false;
+    }
+}
+
+function applySearch(items){
+    var q=(document.getElementById('searchInput').value||'').toLowerCase().trim();
+    if(!q)return items;
+    return items.filter(i=>(i.full_name||'').toLowerCase().includes(q)||(i.contact_number||'').toLowerCase().includes(q)||(i.concern||'').toLowerCase().includes(q));
+}
+function applyFilters(){refreshData();}
+function clearFilters(){
+    document.getElementById('statusFilter').value='all';
+    document.getElementById('priorityFilter').value='all';
+    document.getElementById('dateFilter').value='';
+    document.getElementById('searchInput').value='';
+    refreshData();
+}
+
+function escHtml(s){
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/* ─────────────────────────────────────────────
+   renderTable  — the core display function
+   FIX: served_by pill now reads item.served_by
+        from the DB response, and shows a special
+        "You" badge when it matches the logged-in
+        agent (SESSION_USER_NAME).
+───────────────────────────────────────────── */
+function renderTable(items){
+    var tbody=document.getElementById('tableBody'),sub=document.getElementById('tableSubtitle');
+    if(!items||items.length===0){renderEmpty('No customers found matching your filters.');sub.textContent='0 records';return;}
+    sub.textContent=items.length+' record'+(items.length!==1?'s':'');
+
+    var sorted=[...items].sort((a,b)=>{
+        if(a.status==='Pending'&&b.status!=='Pending')return -1;
+        if(a.status!=='Pending'&&b.status==='Pending')return 1;
+        if(a.status==='Pending')return new Date(a.timestamp)-new Date(b.timestamp);
+        return new Date(b.served_at||b.timestamp)-new Date(a.served_at||a.timestamp);
+    });
+    var pendingItems=sorted.filter(i=>i.status==='Pending');
+
+    tbody.innerHTML=sorted.map(item=>{
+        var isPending   = item.status==='Pending';
+        var isCritical  = (item.priority||'').toLowerCase()==='critical';
+        var waitMins    = waitMinutes(item.timestamp);
+
+        /* ── Queue position ── */
+        var posCell=isPending
+            ?'<span class="queue-pos">'+(pendingItems.findIndex(i=>i.id===item.id)+1)+'</span>'
+            :'<span class="queue-pos resolved">✓</span>';
+
+        /* ── Wait / response time ── */
+        var waitCell=isPending
+            ?'<span class="wait-time '+(waitMins>30?'long':waitMins>15?'medium-wait':'')+'" title="Waiting since '+new Date(item.timestamp).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true})+'">'+formatWait(item.timestamp)+'</span>'
+            :(()=>{
+                var rt=formatResponseTime(item.timestamp,item.served_at);
+                if(rt)return'<span class="wait-time '+(rt.minutes>30?'long':rt.minutes>15?'medium-wait':'')+'" title="Total wait">'+rt.display+'</span>';
+                return'<span class="wait-time">—</span>';
+            })();
+
+        /* ── Served At / By cell ─────────────────────────────────────
+           served_by comes from the DB column (populated by the backend
+           when the agent clicks Serve).  If it matches the current
+           logged-in agent we show a small "You" badge.
+        ─────────────────────────────────────────────────────────────── */
+        var servedCell='<span style="color:var(--text-light);font-size:11px;">—</span>';
+        if(!isPending && item.served_at){
+            var servedByName = item.served_by || '';
+            var isSelf = (SESSION_USER_LOADED && servedByName &&
+                          servedByName.trim().toLowerCase() === SESSION_USER_NAME.trim().toLowerCase());
+            var youBadge = isSelf ? '<span class="agent-self-pill">You</span>' : '';
+            var servedByHtml = servedByName
+                ? '<span class="served-by-pill">👤 '+escHtml(servedByName)+'</span>'+youBadge
+                : '<span style="color:var(--text-light);font-size:11px;font-style:italic;">—</span>';
+
+            servedCell =
+                '<div style="display:flex;flex-direction:column;gap:3px;">'
+                +'<span class="served-time">✓ '+formatTime(item.served_at)+'</span>'
+                +servedByHtml
+                +'</div>';
+        }
+
+        var statusBadge='<span class="badge badge-'+(item.status||'').toLowerCase()+'">'+escHtml(item.status)+'</span>';
+        var priClass=(item.priority||'low').toLowerCase();
+        var priBadge='<span class="badge badge-'+priClass+'">'+escHtml(item.priority)+'</span>';
+
+        var actions='<button class="act-btn view" onclick="event.stopPropagation();showDetail('+item.id+')">👁 View</button>';
+        if(isPending){
+            actions+=' <button class="act-btn serve" onclick="event.stopPropagation();serveCustomer('+item.id+')">✓ Resolve</button>';
+        }else if (window.CURRENT_USER_ROLE === 'superadmin'){
+            actions+=' <button class="act-btn remove" onclick="event.stopPropagation();removeRecord('+item.id+')">🗑 Remove</button>';
+        }
+
+        /* Row gets a special class if this agent served the customer */
+        var selfClass = (!isPending && item.served_by &&
+            SESSION_USER_LOADED &&
+            item.served_by.trim().toLowerCase()===SESSION_USER_NAME.trim().toLowerCase())
+            ? ' served-by-me' : '';
+
+        return'<tr class="'+(isCritical?'is-critical':'')+' '+(isPending?'is-pending':'')+selfClass+'" onclick="showDetail('+item.id+')" title="Click to view details">'
+            +'<td>'+posCell+'</td>'
+            +'<td><div class="name-cell"><span class="name-main">'+escHtml(item.full_name||'—')+'</span><span class="name-sub">'+escHtml(item.contact_number||'')+'</span></div></td>'
+            +'<td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="'+escHtml(item.concern||'')+'">'+escHtml(item.concern||'—')+'</td>'
+            +'<td>'+priBadge+'</td>'
+            +'<td>'+waitCell+'</td>'
+            +'<td>'+statusBadge+'</td>'
+            +'<td>'+servedCell+'</td>'
+            +'<td onclick="event.stopPropagation()">'+actions+'</td>'
+            +'</tr>';
+    }).join('');
+}
+
+function renderEmpty(msg){
+    document.getElementById('tableBody').innerHTML=
+        '<tr><td colspan="8"><div class="empty-state">'
+        +'<div class="empty-icon">✓</div>'
+        +'<div class="empty-title">Queue is clear</div>'
+        +'<div class="empty-sub">'+escHtml(msg)+'</div>'
+        +'</div></td></tr>';
+}
+
+function updateKPIs(){
+    var pending=allItems.filter(i=>i.status==='Pending'),
+        critical=pending.filter(i=>(i.priority||'').toLowerCase()==='critical'),
+        servedToday=allItems.filter(i=>i.status==='Resolved'&&isSameLocalDay(i.served_at));
+    var avgWait='—';
+    if(pending.length>0){
+        var total=pending.reduce((s,i)=>s+waitMinutes(i.timestamp),0);
+        var avg=Math.round(total/pending.length);
+        avgWait=avg<60?avg+'m':Math.floor(avg/60)+'h '+avg%60+'m';
+    }
+    function st(id,v){var el=document.getElementById(id);if(el)el.textContent=v;}
+    st('kpiTotal',allItems.length);st('kpiPending',pending.length);st('kpiServedToday',servedToday.length);st('kpiCritical',critical.length);st('kpiAvgWait',avgWait);
+    var todayAll=allItems.filter(i=>isSameLocalDay(i.timestamp)),
+        totalToday=todayAll.length,
+        serveRate=totalToday>0?Math.round((servedToday.length/totalToday)*100):0;
+    st('sumTotal',totalToday);st('sumServed',servedToday.length);st('sumPending',pending.length);st('sumCritical',critical.length);st('sumServeRate',serveRate+'%');
+    var qb=document.getElementById('queueBadge');if(qb){qb.textContent=pending.length;qb.style.display=pending.length>0?'block':'none';}
+}
+
+async function pauseBot(senderId) {
+    if(!senderId){ showToast('❌ No Facebook user ID for this record.','error'); return; }
+    if(!confirm('Pause the bot for this user? They will get no automated replies until you resume them.')) return;
+    try {
+        var res = await fetch(
+            '/api/internal/pause_conversation/' + senderId,
+            { method: 'POST', credentials: 'same-origin' }
+        );
+        var data = await res.json();
+        if (data.success) {
+            showToast('⏸ Bot paused for this user.', 'success');
+        } else {
+            showToast('❌ Pause failed: ' + data.error, 'error');
+        }
+    } catch (e) {
+        showToast('❌ Network error', 'error');
+    }
+}
+
+async function resumeSingleUser(senderId) {
+    try {
+        var res = await fetch(
+            '/api/internal/force_resume/' + senderId,
+            { method: 'POST', credentials: 'same-origin' }
+        );
+        var data = await res.json();
+        if (data.success) {
+            showToast('✅ Bot resumed for user ' + senderId, 'success');
+        } else {
+            showToast('❌ Resume failed: ' + JSON.stringify(data.results), 'error');
+        }
+    } catch (e) {
+        showToast('❌ Network error', 'error');
+    }
+}
+async function serveCustomer(id){
+    await ensureSessionUser();
+    var servedBy = SESSION_USER_NAME || 'Agent';
+
+    var item = allItems.find(i=>i.id===id);
+    var name = item ? (item.full_name||'this customer') : 'this customer';
+
+    if(!confirm('Resolve "'+name+'" and resume their bot conversation?'))return;
+
+    try{
+        var res=await fetch('/api/agent_queue/'+id+'/serve',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            credentials:'same-origin',
+            body:JSON.stringify({served_by: servedBy})
+        });
+
+        // ── Handle 409 Conflict (already resolved by another agent) ──
+        if(res.status === 409){
+            showToast('⚠️ Already resolved by another agent.','warn');
+            refreshData();
+            return;
+        }
+
+        // ── FIX: handle expired CSRF token (400, error_code CSRF_INVALID).
+        // This page is left open by agents for long stretches; if the
+        // page's CSRF token outlives its validity window, every POST
+        // gets rejected. Instead of leaving the agent stuck on a dead
+        // error, auto-refresh the page so a fresh token is issued.
+        if(res.status === 400){
+            var errBody = null;
+            try{ errBody = await res.json(); }catch(e){}
+            if(errBody && errBody.error_code === 'CSRF_INVALID'){
+                showToast('⚠️ Session expired — refreshing page…','warn');
+                setTimeout(()=>location.reload(), 1500);
+                return;
+            }
+            if(errBody){
+                showToast('❌ '+(errBody.error||'Resolve failed'),'error');
+                return;
+            }
+        }
+
+        var data=await res.json();
+        if(data.success){
+            var idx=allItems.findIndex(i=>i.id===id);
+            if(idx!==-1){
+                allItems[idx].status='Resolved';
+                allItems[idx].served_at=new Date().toISOString();
+                allItems[idx].served_by=servedBy;
+            }
+            renderTable(applySearch(allItems));
+            updateKPIs();
+
+            // Show whether Rasa resume succeeded
+            if(data.rasa_ok === false){
+                showToast('✅ Resolved locally — Rasa resume failed, check logs.','warn');
+            } else {
+                showToast('✅ '+name+' resolved. Bot conversation resumed.','success');
+            }
+
+            setTimeout(refreshData, 1000);
+        }else if(data.already_served){
+            showToast('⚠️ Already resolved: '+data.error,'warn');
+            refreshData();
+        }else{
+            showToast('❌ '+(data.error||'Resolve failed'),'error');
+        }
+    }catch(e){
+        showToast('❌ Network error. Please retry.','error');
+    }
+}
+
+function exportQueueCSV() {
+    var data = applySearch(allItems);
+    if (!data || !data.length) { showToast('No records to export', 'info'); return; }
+
+    var header = ['ID','Full Name','Contact Number','Concern','Priority','Status',
+        'Queued At','Wait/Response Time','Served At','Served By','Facebook User ID'];
+
+    var rows = data.map(item => {
+        var rt = formatResponseTime(item.timestamp, item.served_at);
+        return [
+            item.id, item.full_name || '', item.contact_number || '', item.concern || '',
+            item.priority || '', item.status || '', formatDateTime(item.timestamp),
+            item.status === 'Pending' ? formatWait(item.timestamp) : (rt ? rt.display : ''),
+            formatDateTime(item.served_at), item.served_by || '', item.user_id || ''
+        ];
+    });
+
+    var ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    _downloadCSV([header, ...rows], `ileco1_service_queue_${ts}.csv`);
+}
+function _csvEscape(v){ if(v==null)return ''; var s=String(v).replace(/"/g,'""'); return /[",\n]/.test(s)?'"'+s+'"':s; }
+function _downloadCSV(rows, filename) {
+    var csv = rows.map(r => r.map(_csvEscape).join(',')).join('\r\n');
+    var blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+async function serveNext(){
+    var first=allItems
+        .filter(i=>i.status==='Pending')
+        .sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp))[0];
+    if(!first){showToast('ℹ️ No pending customers in queue.','info');return;}
+    await serveCustomer(first.id);
+}
+
+async function removeRecord(id){
+    if(!confirm('Remove this resolved record from the queue?'))return;
+    try{
+        var res=await fetch('/api/agent_queue/'+id+'/remove',{method:'DELETE',credentials:'same-origin'});
+        var data=await res.json();
+        if(data.success){showToast('🗑 Record removed.','success');refreshData();}
+        else showToast('❌ '+data.error,'error');
+    }catch(e){showToast('❌ Network error.','error');}
+}
+
+/* ═══════════════════════════════════════════════════
+   DETAIL MODAL
+   FIX: "Served By" card now shows correctly, and
+        labels the agent as "You" when applicable.
+═══════════════════════════════════════════════════ */
+function showDetail(id){
+    var item=allItems.find(i=>i.id===id);if(!item)return;
+    var isPending   = item.status==='Pending';
+    var waitMins    = waitMinutes(item.timestamp);
+    var priClass    = (item.priority||'low').toLowerCase();
+    var rt          = formatResponseTime(item.timestamp,item.served_at);
+
+    document.getElementById('modalTitle').textContent=item.full_name||'Customer Details';
+
+    var timingLabel   = isPending?'Current Wait Time':'Served At';
+    var timingContent = isPending
+        ?(waitMins>30?'<span class="badge badge-critical">'+formatWait(item.timestamp)+'</span>':formatWait(item.timestamp))
+        :'<span class="served-time">✓ '+formatDateTime(item.served_at)+'</span>';
+
+    var responseCard = !isPending&&rt
+        ?'<div class="detail-card"><div class="detail-lbl">⏱️ Response Time</div>'
+          +'<div class="detail-val" style="font-family:\'DM Mono\',monospace;">'
+          +'<span style="'+rt.cssClass+'">'+rt.display+'</span>'
+          +'</div></div>'
+        :'';
+
+    /* ── Served-by card ───────────────────────────────────────────────
+       Shows the agent who marked this customer as served.
+       If it matches the currently logged-in user → appends "You" badge.
+    ─────────────────────────────────────────────────────────────────── */
+    var servedByCard='';
+    if(!isPending){
+        var servedByName = item.served_by || '';
+        var isSelf = (SESSION_USER_LOADED && servedByName &&
+                      servedByName.trim().toLowerCase() === SESSION_USER_NAME.trim().toLowerCase());
+        var youBadge = isSelf ? ' <span class="agent-self-pill">You</span>' : '';
+
+        servedByCard =
+            '<div class="detail-card">'
+            +'<div class="detail-lbl">👤 Served By</div>'
+            +'<div class="detail-val">'
+            +(servedByName
+                ?'<span class="served-by-pill">👤 '+escHtml(servedByName)+'</span>'+youBadge
+                :'<span style="color:var(--text-light);font-style:italic;font-size:13px;">Not recorded</span>')
+            +'</div></div>';
+    }
+
+    document.getElementById('modalGrid').innerHTML=
+        '<div class="detail-card"><div class="detail-lbl">Full Name</div><div class="detail-val">'+escHtml(item.full_name||'—')+'</div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Contact Number</div><div class="detail-val" style="font-family:\'DM Mono\',monospace;">'+escHtml(item.contact_number||'—')+'</div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Priority</div><div class="detail-val"><span class="badge badge-'+priClass+'">'+escHtml(item.priority||'—')+'</span></div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Status</div><div class="detail-val"><span class="badge badge-'+(item.status||'').toLowerCase()+'">'+escHtml(item.status||'—')+'</span></div></div>'
+        +'<div class="detail-card full"><div class="detail-lbl">Concern</div><div class="detail-val">'+escHtml(item.concern||'—')+'</div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Queued At</div><div class="detail-val">'+formatDateTime(item.timestamp)+'</div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">'+timingLabel+'</div><div class="detail-val">'+timingContent+'</div></div>'
+        +responseCard
+        +servedByCard
+        +'<div class="detail-card full" style="background:var(--navy);color:#fff;">'
+        +'<div class="detail-lbl" style="color:rgba(255,255,255,.5);">Facebook User ID</div>'
+        +'<div class="detail-val" style="color:var(--gold);font-family:\'DM Mono\',monospace;font-size:12px;">'+escHtml(item.user_id||'—')+'</div>'
+        +'</div>';
+
+    var footer=document.getElementById('modalFooter');
+    if(isPending){
+    footer.innerHTML=
+        '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'
+        +'<button class="btn" style="background:var(--amber-bg);color:var(--amber-dark);" onclick="pauseBot(\''+escHtml(item.user_id)+'\')">⏸ Pause Bot</button>'
+        +'<button class="btn btn-primary" onclick="closeModal();serveCustomer('+item.id+')">✓ Resolve & Resume</button>';
+
+    }else{
+        var removeBtn = window.CURRENT_USER_ROLE === 'superadmin'
+            ? '<button class="btn" style="background:var(--red-bg);color:var(--red-dark);" onclick="closeModal();removeRecord('+item.id+')">🗑 Remove Record</button>'
+            : '';
+        footer.innerHTML=
+            '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'
+            + removeBtn;
+    }
+    document.getElementById('detailModal').classList.add('show');
+}
+
+function closeModal(){document.getElementById('detailModal').classList.remove('show');}
+
+function showToast(msg,type='info'){
+    var c=document.getElementById('toastContainer'),t=document.createElement('div');
+    t.className='toast '+type;t.textContent=msg;c.appendChild(t);
+    setTimeout(()=>t.remove(),4500);
+}
+
+/* Event listeners */
+document.getElementById('searchInput').addEventListener('input',()=>{renderTable(applySearch(allItems));});
+document.getElementById('detailModal').addEventListener('click',e=>{if(e.target.id==='detailModal')closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+document.addEventListener('DOMContentLoaded',()=>{
+    /* Pre-load session user immediately so it's ready before first serve click */
+    ensureSessionUser();
+    document.getElementById('statusFilter').value='all';
+    initSocket();
+    refreshData();
+    if(refreshTimer)clearInterval(refreshTimer);
+    refreshTimer=setInterval(refreshData,60000);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshData();});
+});
+
+
+</script>
+</body>
+</html>

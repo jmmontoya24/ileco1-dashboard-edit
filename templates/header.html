@@ -1,0 +1,706 @@
+<style>
+/* ===== SHARED HEADER STYLES — paste into each page's <style> block ===== */
+.ileco-header {
+    background: rgba(15, 28, 63, 0.97);
+    backdrop-filter: blur(12px);
+    padding: 0 24px;
+    height: 62px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    position: sticky;
+    top: 0;
+    z-index: 1200;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.35);
+    border-bottom: 1px solid rgba(245,166,35,0.2);
+}
+
+/* Brand */
+.ileco-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 800;
+    font-size: 16px;
+    color: #fff;
+    text-decoration: none;
+    margin-right: 28px;
+    flex-shrink: 0;
+    letter-spacing: 0.3px;
+}
+.ileco-brand .bolt {
+    font-size: 22px;
+    filter: drop-shadow(0 0 6px rgba(251,191,36,0.6));
+}
+.ileco-brand span { color: #fbbf24; }
+
+/* Nav tabs */
+.ileco-nav {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+    align-items: center;
+}
+.ileco-nav-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: rgba(255,255,255,0.6);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    text-decoration: none;
+    font-family: inherit;
+}
+.ileco-nav-tab:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.ileco-nav-tab.active { background: #fbbf24; color: #0f1c3f; }
+.ileco-nav-badge {
+    position: absolute;
+    top: -6px; right: -6px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 5px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+    display: none;
+    line-height: 1.4;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    animation: badge-pulse 2s infinite;
+}
+.ileco-nav-badge.scheduled-badge {
+    background: #f59e0b; /* Distinct amber badge warning for future schedules */
+}
+@keyframes badge-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
+
+/* Live outage widget */
+.ileco-outage-widget {
+    position: relative;
+    margin-left: 8px;
+}
+.ileco-outage-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 13px;
+    background: rgba(239,68,68,0.12);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 8px;
+    color: #fca5a5;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+.ileco-outage-btn:hover { background: rgba(239,68,68,0.2); color: #fff; }
+.ileco-outage-btn .pulse-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    animation: live-pulse 1.5s infinite;
+}
+@keyframes live-pulse {
+    0%,100%{ box-shadow: 0 0 0 0 rgba(239,68,68,0.7); }
+    70%{ box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+}
+
+/* Outage dropdown */
+.ileco-outage-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 340px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+    border: 1px solid #e5e7eb;
+    z-index: 3000;
+    overflow: hidden;
+    animation: dropdown-in 0.15s ease;
+}
+.ileco-outage-dropdown.open { display: block; }
+@keyframes dropdown-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.outage-dropdown-header {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.outage-dropdown-header h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.outage-dropdown-header a {
+    font-size: 11px;
+    color: rgba(255,255,255,0.75);
+    text-decoration: none;
+    font-weight: 600;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+.outage-dropdown-header a:hover { background: rgba(255,255,255,0.25); color: #fff; }
+.outage-list { max-height: 300px; overflow-y: auto; }
+.outage-item {
+    padding: 11px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    cursor: pointer;
+    transition: background 0.15s;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+.outage-item:last-child { border-bottom: none; }
+.outage-item:hover { background: #f8fafc; }
+.outage-item-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 4px;
+}
+.outage-item-dot.critical { background: #dc2626; animation: live-pulse 1.5s infinite; }
+.outage-item-dot.high     { background: #f59e0b; }
+.outage-item-dot.medium   { background: #10b981; }
+.outage-item-info { flex: 1; min-width: 0; }
+.outage-item-loc {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.outage-item-meta {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 2px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.outage-item-badge {
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.outage-item-badge.NEW      { background: #fee2e2; color: #991b1b; }
+.outage-item-badge.ASSIGNED { background: #fef3c7; color: #92400e; }
+.outage-empty {
+    padding: 32px 20px;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 13px;
+}
+
+/* Right side actions */
+.ileco-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+/* Connection pill */
+.ileco-conn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px;
+    border-radius: 20px;
+    background: rgba(16,185,129,0.15);
+    color: #10b981;
+    font-size: 12px;
+    font-weight: 600;
+}
+.ileco-conn.off { background: rgba(239,68,68,0.12); color: #ef4444; }
+.ileco-conn-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: blink 2s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* User dropdown */
+.ileco-user-widget { position: relative; }
+.ileco-user-btn {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 5px 12px 5px 6px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 24px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #fff;
+    font-family: inherit;
+}
+.ileco-user-btn:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.22); }
+.ileco-user-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+    color: #0f1c3f;
+    flex-shrink: 0;
+    text-transform: uppercase;
+}
+.ileco-user-info { text-align: left; line-height: 1.2; }
+.ileco-user-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ileco-user-role {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+.ileco-user-caret {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    transition: transform 0.2s;
+}
+.ileco-user-btn.open .ileco-user-caret { transform: rotate(180deg); }
+
+/* User dropdown menu */
+.ileco-user-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 240px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+    border: 1px solid #e5e7eb;
+    z-index: 3000;
+    overflow: hidden;
+    animation: dropdown-in 0.15s ease;
+}
+.ileco-user-dropdown.open { display: block; }
+.user-dd-header {
+    padding: 16px;
+    background: linear-gradient(135deg, #0f1c3f, #1e3270);
+    text-align: center;
+}
+.user-dd-avatar-lg {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    font-weight: 800;
+    color: #0f1c3f;
+    margin: 0 auto 10px;
+    text-transform: uppercase;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.user-dd-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: #fff;
+}
+.user-dd-role {
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+.user-dd-menu { padding: 8px; }
+.user-dd-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    text-decoration: none;
+    border: none;
+    background: none;
+    width: 100%;
+    font-family: inherit;
+}
+.user-dd-item:hover { background: #f3f4f6; color: #111827; }
+.user-dd-item.danger { color: #dc2626; }
+.user-dd-item.danger:hover { background: #fee2e2; }
+.user-dd-item .dd-icon { font-size: 16px; width: 24px; text-align: center; }
+.user-dd-divider { height: 1px; background: #f3f4f6; margin: 4px 8px; }
+</style>
+
+<header class="ileco-header" id="ilecoHeader">
+    <a href="/dashboard" class="ileco-brand">
+        <span class="bolt">⚡</span>
+        ILECO<span>-1</span>
+    </a>
+
+    <nav class="ileco-nav" id="ilecoNav">
+        <a href="/dashboard" class="ileco-nav-tab" id="navOutages">
+            ⚡ Outage Management Dashboard
+            <span class="ileco-nav-badge" id="outagesBadge">0</span>
+        </a>
+        <a href="/scheduled_outages" class="ileco-nav-tab" id="navScheduled">
+            📅 Scheduled Outages
+            <span class="ileco-nav-badge scheduled-badge" id="scheduledBadge">0</span>
+        </a>
+        <a href="/meter_dashboard" class="ileco-nav-tab" id="navMeter">
+            🔧 Meter Monitoring Dashboard
+            <span class="ileco-nav-badge" id="meterBadge">0</span>
+        </a>
+        <a href="/agent_queue" class="ileco-nav-tab" id="navQueue">
+            💬 Service Desk Operations Dashboard
+            <span class="ileco-nav-badge" id="queueBadge">0</span>
+        </a>
+        <a href="/spam_monitor" class="ileco-nav-tab" id="navSpam">
+    <span class="tab-icon">🛡️</span> Spam Monitor
+    <span class="ileco-nav-badge" id="spamBadge">0</span>
+</a>
+        
+    </nav>
+
+    <div class="ileco-header-right">
+
+        <div class="ileco-outage-widget" id="outageWidget">
+            <button class="ileco-outage-btn" id="outageWidgetBtn" onclick="toggleOutageDropdown()">
+                <span class="pulse-dot"></span>
+                <span id="outageWidgetCount">0</span> Active
+            </button>
+            <div class="ileco-outage-dropdown" id="outageDropdown">
+                <div class="outage-dropdown-header">
+                    <h3>🚨 Active Outages</h3>
+                    <a href="/dashboard">View All →</a>
+                </div>
+                <div class="outage-list" id="outageList">
+                    <div class="outage-empty">Loading…</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="ileco-conn" id="ilecoConn">
+            <span class="ileco-conn-dot"></span>
+            <span id="ilecoConnLabel">Connecting…</span>
+        </div>
+
+        <div class="ileco-user-widget" id="userWidget">
+            <button class="ileco-user-btn" id="userBtn" onclick="toggleUserDropdown()">
+                <div class="ileco-user-avatar" id="headerAvatar">?</div>
+                <div class="ileco-user-info">
+                    <div class="ileco-user-name" id="headerUsername">Loading…</div>
+                    <div class="ileco-user-role" id="headerRole">staff</div>
+                </div>
+                <span class="ileco-user-caret">▼</span>
+            </button>
+
+            <div class="ileco-user-dropdown" id="userDropdown">
+                <div class="user-dd-header">
+                    <div class="user-dd-avatar-lg" id="ddAvatar">?</div>
+                    <div class="user-dd-name" id="ddName">Loading…</div>
+                    <div class="user-dd-role" id="ddRole">staff</div>
+                </div>
+                <div class="user-dd-menu">
+                    <a href="/dashboard" class="user-dd-item">
+                        <span class="dd-icon">📊</span> Dashboard
+                    </a>
+                    <a href="/user_management" class="user-dd-item" id="ddUserMgmt" style="display:none;">
+                        <span class="dd-icon">👥</span> User Management
+                    </a>
+                    <div class="user-dd-divider"></div>
+                    <button class="user-dd-item danger" onclick="confirmLogout()">
+                        <span class="dd-icon">🚪</span> Sign Out
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</header>
+
+<div id="logoutConfirm" style="
+    display:none; position:fixed; inset:0;
+    background:rgba(15,28,63,0.65); backdrop-filter:blur(4px);
+    z-index:9999; align-items:center; justify-content:center;">
+    <div style="
+        background:#fff; border-radius:16px; padding:32px;
+        max-width:360px; width:90%; text-align:center;
+        box-shadow:0 20px 60px rgba(0,0,0,0.3);
+        animation: dropdown-in 0.2s ease;">
+        <div style="font-size:48px; margin-bottom:12px;">🚪</div>
+        <h3 style="font-size:20px; font-weight:800; color:#0f1c3f; margin-bottom:8px;">Sign Out?</h3>
+        <p style="font-size:14px; color:#6b7280; margin-bottom:24px; line-height:1.6;">
+            You are signed in as <strong id="logoutUsername" style="color:#0f1c3f;"></strong>.<br>
+            Are you sure you want to sign out?
+        </p>
+        <div style="display:flex; gap:12px; justify-content:center;">
+            <button onclick="document.getElementById('logoutConfirm').style.display='none'"
+                style="padding:11px 24px; background:#f3f4f6; color:#374151;
+                       border:none; border-radius:8px; font-weight:700; cursor:pointer; font-size:14px;">
+                Cancel
+            </button>
+            <a href="/logout" style="
+                padding:11px 24px; background:linear-gradient(135deg,#dc2626,#b91c1c);
+                color:#fff; border:none; border-radius:8px;
+                font-weight:700; cursor:pointer; font-size:14px;
+                text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+                🚪 Yes, Sign Out
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ===== SHARED HEADER SCRIPT =====
+   Paste this block into EVERY dashboard page that uses this header.
+   Or better: save as /static/js/header.js and include it with:
+   <script src="/static/js/header.js"><\/script>
+*/
+
+(function() {
+    'use strict';
+
+    /* ── Load current user info ── */
+    async function loadUserInfo() {
+        try {
+            const res  = await fetch('/api/me', { credentials: 'same-origin' });
+            const data = await res.json();
+            if (!data.success) return;
+            const u = data.user;
+            const initials = getInitials(u.full_name || u.username || '?');
+            const displayName = u.full_name || u.username || '?';
+            const role = u.role || 'staff';
+
+            /* Header avatar + name */
+            setText('headerAvatar',   initials);
+            setHTML('headerUsername', esc(displayName));
+            setHTML('headerRole',     esc(role));
+
+            /* Dropdown */
+            setText('ddAvatar', initials);
+            setHTML('ddName',   esc(displayName));
+            setHTML('ddRole',   esc(role));
+
+            /* Logout modal */
+            setHTML('logoutUsername', esc(displayName));
+
+            /* Show User Management link only for admin/superadmin */
+            const mgmtLink = document.getElementById('ddUserMgmt');
+            if (mgmtLink && role === 'superadmin') {
+                mgmtLink.style.display = 'flex';
+            }
+        } catch(e) {
+            console.warn('Could not load user info:', e);
+        }
+    }
+
+    /* ── Load recent outages ── */
+    async function loadRecentOutages() {
+        try {
+            const res  = await fetch('/api/recent_outages', { credentials: 'same-origin' });
+            const data = await res.json();
+            const list = document.getElementById('outageList');
+            const countEl = document.getElementById('outageWidgetCount');
+            if (!list) return;
+            if (!data.success || !data.outages || data.outages.length === 0) {
+                list.innerHTML = '<div class="outage-empty">✅ No active outages</div>';
+                if (countEl) countEl.textContent = '0';
+                return;
+            }
+            const outages = data.outages;
+            if (countEl) countEl.textContent = outages.length;
+            list.innerHTML = outages.map(o => {
+                const dotClass = (o.priority||'').toUpperCase() === 'CRITICAL' ? 'critical'
+                               : (o.priority||'').toUpperCase() === 'HIGH'     ? 'high' : 'medium';
+                const time = o.first_report_time
+                    ? timeAgoShort(o.first_report_time)
+                    : '';
+                return `<div class="outage-item" onclick="window.location.href='/dashboard'">
+                    <div class="outage-item-dot ${dotClass}"></div>
+                    <div class="outage-item-info">
+                        <div class="outage-item-loc">${esc(o.barangay||'')}${o.town?', '+esc(o.town):''}</div>
+                        <div class="outage-item-meta">
+                            <span class="outage-item-badge ${o.status}">${esc(o.status)}</span>
+                            <span>${esc(o.report_count||0)} report${(o.report_count||0)!==1?'s':''}</span>
+                            ${o.feeder_name?`<span>⚡ ${esc(o.feeder_name)}</span>`:''}
+                            ${time?`<span>${time}</span>`:''}
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            console.warn('Could not load recent outages:', e);
+        }
+    }
+
+    /* ── Load notification badges ── */
+    async function loadBadges() {
+        try {
+            const res  = await fetch('/api/badge_counts', { credentials: 'same-origin' });
+            const data = await res.json();
+            if (!data.success) return;
+            setBadge('outagesBadge',   data.counts.outages);
+            setBadge('scheduledBadge', data.counts.scheduled || 0);
+            setBadge('meterBadge',     data.counts.meter);
+            setBadge('queueBadge',     data.counts.queue);
+        } catch(e) { /* silent */ }
+    }
+
+    /* ── Active nav tab highlight ── */
+    function highlightActiveTab() {
+        const path = window.location.pathname;
+        const map = {
+            '/dashboard':         'navOutages',
+            '/scheduled_outages': 'navScheduled',
+            '/meter_dashboard':   'navMeter',
+            '/agent_queue':       'navQueue',
+        };
+        Object.entries(map).forEach(([route, id]) => {
+            const el = document.getElementById(id);
+            if (el) el.classList.toggle('active', path.startsWith(route));
+        });
+    }
+
+    /* ── Dropdown toggles ── */
+    window.toggleUserDropdown = function() {
+        const btn = document.getElementById('userBtn');
+        const dd  = document.getElementById('userDropdown');
+        const outDD = document.getElementById('outageDropdown');
+        if (dd) {
+            const isOpen = dd.classList.toggle('open');
+            if (btn) btn.classList.toggle('open', isOpen);
+            /* close other dropdown */
+            if (outDD) outDD.classList.remove('open');
+        }
+    };
+
+    window.toggleOutageDropdown = function() {
+        const dd = document.getElementById('outageDropdown');
+        const userDD = document.getElementById('userDropdown');
+        const userBtn = document.getElementById('userBtn');
+        if (dd) {
+            const isOpen = dd.classList.toggle('open');
+            /* close user dropdown */
+            if (userDD) userDD.classList.remove('open');
+            if (userBtn) userBtn.classList.remove('open');
+            /* reload outages each time opened */
+            if (isOpen) loadRecentOutages();
+        }
+    };
+
+    window.confirmLogout = function() {
+        const overlay = document.getElementById('logoutConfirm');
+        if (overlay) {
+            overlay.style.display = 'flex';
+            /* close dropdowns */
+            const dd = document.getElementById('userDropdown');
+            const btn = document.getElementById('userBtn');
+            if (dd) dd.classList.remove('open');
+            if (btn) btn.classList.remove('open');
+        }
+    };
+
+    /* Close dropdowns on outside click */
+    document.addEventListener('click', function(e) {
+        const userWidget   = document.getElementById('userWidget');
+        const outageWidget = document.getElementById('outageWidget');
+        if (userWidget && !userWidget.contains(e.target)) {
+            const dd  = document.getElementById('userDropdown');
+            const btn = document.getElementById('userBtn');
+            if (dd) dd.classList.remove('open');
+            if (btn) btn.classList.remove('open');
+        }
+        if (outageWidget && !outageWidget.contains(e.target)) {
+            const dd = document.getElementById('outageDropdown');
+            if (dd) dd.classList.remove('open');
+        }
+    });
+
+    /* ── Connection status (exposed globally for each page's socket) ── */
+    window.updateIlecoConn = function(connected) {
+        const pill  = document.getElementById('ilecoConn');
+        const label = document.getElementById('ilecoConnLabel');
+        if (!pill || !label) return;
+        pill.className = 'ileco-conn' + (connected ? '' : ' off');
+        label.textContent = connected ? 'Live' : 'Offline';
+    };
+
+    /* ── Helpers ── */
+    function getInitials(name) {
+        const parts = (name||'').trim().split(/\s+/);
+        if (parts.length >= 2) return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+        return (name||'?').substring(0, 2).toUpperCase();
+    }
+    function setHTML(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
+    function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
+    function esc(s) {
+        return String(s||'')
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function setBadge(id, count) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent   = count;
+        el.style.display = count > 0 ? 'block' : 'none';
+    }
+    function timeAgoShort(iso) {
+        const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+        if (diff < 60)   return `${diff}s ago`;
+        if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+        return `${Math.floor(diff/3600)}h ago`;
+    }
+
+    /* ── Init ── */
+    function init() {
+        loadUserInfo();
+        loadRecentOutages();
+        loadBadges();
+        highlightActiveTab();
+        /* Refresh badges every 30s */
+        setInterval(loadBadges, 30000);
+        /* Refresh outage count every 15s */
+        setInterval(loadRecentOutages, 15000);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>

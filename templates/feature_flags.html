@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ILECO-1 | Feature Flags</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+        :root{
+            --navy:#0f1c3f; --navy-mid:#162550; --gold:#f5a623;
+            --smoke:#f4f6fb; --border:#dde3f0; --text-dark:#0f1c3f;
+            --text-mid:#4a5578; --text-light:#8892aa;
+            --green:#10b981; --red:#ef4444;
+            --shadow-md:0 4px 16px rgba(15,28,63,.12);
+            --radius:10px; --radius-lg:16px;
+        }
+        body{font-family:'DM Sans',sans-serif;background:var(--smoke);color:var(--text-dark);min-height:100vh;}
+        .topbar{background:var(--navy);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;}
+        .topbar h1{color:#fff;font-size:18px;}
+        .topbar a{color:var(--gold);text-decoration:none;font-weight:600;font-size:13px;}
+        .main{max-width:900px;margin:24px auto;padding:0 20px;}
+        .panel{background:#fff;border-radius:var(--radius-lg);box-shadow:var(--shadow-md);border:1px solid var(--border);overflow:hidden;}
+        .panel-header{padding:16px 22px;border-bottom:1px solid var(--border);}
+        .panel-header h2{font-size:16px;}
+        .panel-header p{font-size:12px;color:var(--text-light);margin-top:2px;}
+        .flag-row{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--border);}
+        .flag-row:last-child{border-bottom:none;}
+        .flag-label{font-weight:700;font-size:14px;}
+        .flag-desc{font-size:12px;color:var(--text-light);margin-top:2px;}
+        .flag-meta{font-size:11px;color:var(--text-light);margin-top:4px;}
+        .switch{position:relative;display:inline-block;width:46px;height:24px;flex-shrink:0;}
+        .switch input{opacity:0;width:0;height:0;}
+        .slider{position:absolute;cursor:pointer;inset:0;background:#ccc;border-radius:24px;transition:.2s;}
+        .slider::before{content:"";position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;}
+        input:checked + .slider{background:var(--green);}
+        input:checked + .slider::before{transform:translateX(22px);}
+        .status-off{color:var(--red);font-weight:700;font-size:11px;}
+        .toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+        .toast{padding:12px 18px;border-radius:9px;font-size:13px;font-weight:600;box-shadow:var(--shadow-md);color:#fff;}
+        .toast.success{background:var(--green);} .toast.error{background:var(--red);}
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <h1>🎛️ Feature Flags</h1>
+        <a href="/dashboard">← Back to Dashboard</a>
+    </div>
+
+    <div class="main">
+        <div class="panel">
+            <div class="panel-header">
+                <h2>Chatbot Buttons & Features</h2>
+                <p>Toggling a flag disables the button/postback within ~15 seconds — no redeploy needed. Changes are logged with who made them.</p>
+            </div>
+            <div id="flagsList">
+                <div style="padding:30px;text-align:center;color:var(--text-light);">Loading…</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+    (function(){
+        var _csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        var _origFetch = window.fetch;
+        window.fetch = function(input, init){
+            init = init || {};
+            var method = (init.method || 'GET').toUpperCase();
+            if (['POST','PUT','DELETE','PATCH'].includes(method) && _csrfToken) {
+                init.headers = Object.assign({}, init.headers, {'X-CSRFToken': _csrfToken});
+            }
+            return _origFetch(input, init);
+        };
+    })();
+
+    function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+    function showToast(msg, type){
+        var c = document.getElementById('toastContainer');
+        var t = document.createElement('div');
+        t.className = 'toast ' + type;
+        t.textContent = msg;
+        c.appendChild(t);
+        setTimeout(function(){ t.remove(); }, 3500);
+    }
+
+    async function loadFlags(){
+        try {
+            var res = await fetch('/api/admin/feature_flags', {credentials:'same-origin'});
+            var data = await res.json();
+            if (!data.success) { showToast('Failed to load flags: ' + data.error, 'error'); return; }
+
+            document.getElementById('flagsList').innerHTML = data.flags.map(function(f){
+                var meta = f.updated_by
+                    ? 'Last changed by ' + escHtml(f.updated_by) + ' · ' + new Date(f.updated_at).toLocaleString()
+                    : 'No changes yet';
+                return '' +
+                    '<div class="flag-row">' +
+                        '<div>' +
+                            '<div class="flag-label">' + escHtml(f.label) +
+                                (f.enabled ? '' : ' <span class="status-off">OFF</span>') +
+                            '</div>' +
+                            '<div class="flag-desc">' + escHtml(f.description || '') + '</div>' +
+                            '<div class="flag-meta">' + meta + '</div>' +
+                        '</div>' +
+                        '<label class="switch">' +
+                            '<input type="checkbox" ' + (f.enabled ? 'checked' : '') +
+                                ' onchange="toggleFlag(\'' + f.flag_key + '\', this.checked)">' +
+                            '<span class="slider"></span>' +
+                        '</label>' +
+                    '</div>';
+            }).join('');
+        } catch(e) {
+            showToast('Network error loading flags', 'error');
+        }
+    }
+
+    async function toggleFlag(key, enabled){
+        try {
+            var res = await fetch('/api/admin/feature_flags/' + key, {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                credentials: 'same-origin',
+                body: JSON.stringify({enabled: enabled})
+            });
+            var data = await res.json();
+            if (data.success) {
+                showToast((enabled ? '✅ Enabled: ' : '⏸ Disabled: ') + data.flag.label, 'success');
+            } else {
+                showToast('❌ ' + data.error, 'error');
+            }
+        } catch(e) {
+            showToast('❌ Network error', 'error');
+        } finally {
+            loadFlags();
+        }
+    }
+
+    loadFlags();
+    </script>
+</body>
+</html>

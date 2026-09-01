@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>500 | ILECO-1</title>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+:root{
+
+    --bg:#0f172a;
+    --card:#1e293b;
+    --border:#334155;
+    --text:#ffffff;
+    --muted:#94a3b8;
+    --danger:#ef4444;
+
+}
+
+body{
+
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+
+    background:var(--bg);
+
+    color:var(--text);
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    min-height:100vh;
+
+    padding:24px;
+
+}
+
+.container{
+
+    width:min(100%,520px);
+
+}
+
+.card{
+
+    background:var(--card);
+
+    border:1px solid var(--border);
+
+    border-radius:16px;
+
+    padding:clamp(28px,5vw,48px);
+
+    box-shadow:0 12px 40px rgba(0,0,0,.25);
+
+}
+
+.logo{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:10px;
+
+    font-weight:700;
+
+    margin-bottom:32px;
+
+}
+
+.logo span{
+
+    font-size:28px;
+
+}
+
+.badge{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    gap:8px;
+
+    padding:6px 14px;
+
+    border-radius:999px;
+
+    background:rgba(239,68,68,.12);
+
+    color:#fca5a5;
+
+    font-size:13px;
+
+    font-weight:600;
+
+    margin-bottom:20px;
+
+}
+
+h1{
+
+    font-size:clamp(28px,5vw,38px);
+
+    margin-bottom:14px;
+
+}
+
+.line{
+
+    width:70px;
+
+    height:4px;
+
+    background:var(--danger);
+
+    border-radius:999px;
+
+    margin-bottom:24px;
+
+}
+
+p{
+
+    color:var(--muted);
+
+    line-height:1.8;
+
+    font-size:15px;
+
+}
+
+.status{
+
+    margin-top:28px;
+
+    padding:16px;
+
+    border-radius:12px;
+
+    background:#111827;
+
+    border:1px solid var(--border);
+
+}
+
+.status-title{
+
+    font-size:14px;
+
+    font-weight:600;
+
+    margin-bottom:10px;
+
+}
+
+.progress{
+
+    height:6px;
+
+    background:#374151;
+
+    border-radius:999px;
+
+    overflow:hidden;
+
+    margin-bottom:14px;
+
+}
+
+.progress div{
+
+    height:100%;
+
+    width:100%;
+
+    background:var(--danger);
+
+    animation:progress 5s linear forwards;
+
+}
+
+@keyframes progress{
+
+    from{
+
+        width:100%;
+
+    }
+
+    to{
+
+        width:0;
+
+    }
+
+}
+
+.count{
+
+    font-size:14px;
+
+    color:var(--muted);
+
+}
+
+.count span{
+
+    color:white;
+
+    font-weight:700;
+
+}
+
+.actions{
+
+    margin-top:28px;
+
+}
+
+button{
+
+    width:100%;
+
+    padding:14px;
+
+    border:none;
+
+    border-radius:10px;
+
+    background:var(--danger);
+
+    color:white;
+
+    cursor:pointer;
+
+    font-size:15px;
+
+    font-weight:600;
+
+    transition:.25s;
+
+}
+
+button:hover{
+
+    background:#dc2626;
+
+}
+
+.footer{
+
+    margin-top:26px;
+
+    text-align:center;
+
+    color:#64748b;
+
+    font-size:13px;
+
+}
+
+@media (max-width:480px){
+
+    .card{
+
+        padding:24px;
+
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="card">
+
+<div class="logo">
+
+<span>⚡</span>
+
+<div>ILECO-1</div>
+
+</div>
+
+<div class="badge">
+
+500 ERROR
+
+</div>
+
+<h1>We're experiencing a server problem</h1>
+
+<div class="line"></div>
+
+<p>
+
+The request could not be completed because an unexpected error occurred on our server.
+
+</p>
+
+<br>
+
+<p>
+
+Our technical team has been notified and is working to restore the service.
+
+</p>
+
+<div class="status">
+
+<div class="status-title">
+
+Attempting automatic recovery...
+
+</div>
+
+<div class="progress">
+
+<div></div>
+
+</div>
+
+<div class="count">
+
+Redirecting to the dashboard in
+
+<span id="timer">5</span>
+
+seconds...
+
+</div>
+
+</div>
+
+<div class="actions">
+
+<button onclick="location.reload()">
+
+Retry Now
+
+</button>
+
+</div>
+
+<div class="footer">
+
+ILECO-1 Customer Care Communication Center
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+let time = 5;
+
+const timer = document.getElementById("timer");
+
+const countdown = setInterval(function(){
+
+    time--;
+
+    timer.textContent = time;
+
+    if(time<=0){
+
+        clearInterval(countdown);
+
+        window.location.href="/dashboard";
+
+    }
+
+},1000);
+
+</script>
+
+</body>
+</html>

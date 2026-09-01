@@ -1,0 +1,41 @@
+# Secrets
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+
+# Logs
+logs/
+*.log
+
+# Uploads (evidence files)
+uploads/
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Railway
+.railway/.env
+.env.*
+.env
+.env.*

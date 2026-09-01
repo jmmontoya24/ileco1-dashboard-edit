@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ILECO-1 | Meter Concerns</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    :root {
+        --navy:#0f1c3f; --navy-mid:#162550; --navy-light:#1e3270;
+        --gold:#f5a623; --gold-light:#fbbf47; --white:#ffffff;
+        --smoke:#f4f6fb; --border:#dde3f0; --text-dark:#0f1c3f;
+        --text-mid:#4a5578; --text-light:#8892aa;
+        --green:#10b981; --green-bg:#d1fae5; --green-dark:#065f46;
+        --red:#ef4444; --red-bg:#fee2e2; --red-dark:#991b1b;
+        --amber:#f59e0b; --amber-bg:#fef3c7; --amber-dark:#92400e;
+        --blue:#3b82f6; --blue-bg:#dbeafe; --blue-dark:#1e40af;
+        --purple:#8b5cf6; --purple-bg:#ede9fe; --purple-dark:#5b21b6;
+        --shadow-sm:0 1px 3px rgba(15,28,63,.08);
+        --shadow-md:0 4px 16px rgba(15,28,63,.12);
+        --shadow-lg:0 12px 40px rgba(15,28,63,.18);
+        --radius:10px; --radius-lg:16px;
+    }
+    html { font-size:15px; }
+    body { font-family:'DM Sans',sans-serif; background:var(--smoke); color:var(--text-dark); min-height:100vh; display:flex; flex-direction:column; }
+
+    /* ═══════════════════════════════════════════════════
+       SHARED HEADER
+    ═══════════════════════════════════════════════════ */
+    .ileco-header {
+        background:#0f1c3f; height:68px;
+        display:flex; align-items:center; padding:0 28px;
+        position:sticky; top:0; z-index:1200;
+        box-shadow:0 3px 24px rgba(0,0,0,.45);
+        border-bottom:2px solid rgba(245,166,35,.25); gap:0;
+    }
+    .ileco-brand { display:flex; align-items:center; gap:10px; font-weight:900; font-size:17px; letter-spacing:.4px; color:#fff; text-decoration:none; margin-right:24px; flex-shrink:0; white-space:nowrap; }
+    .ileco-brand .bolt { font-size:24px; filter:drop-shadow(0 0 8px rgba(251,191,36,.7)); }
+    .ileco-brand .accent { color:#f5a623; }
+    .ileco-nav { display:flex; gap:6px; flex:1; align-items:center; }
+    .ileco-nav-tab { display:flex; align-items:center; gap:8px; padding:10px 20px; border-radius:10px; border:none; background:transparent; color:rgba(255,255,255,.6); font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; transition:all .2s; position:relative; text-decoration:none; white-space:nowrap; }
+    .ileco-nav-tab:hover { background:rgba(255,255,255,.1); color:#fff; }
+    .ileco-nav-tab.active { background:#f5a623; color:#0f1c3f; box-shadow:0 4px 14px rgba(245,166,35,.35); }
+    .ileco-nav-tab .tab-icon { font-size:18px; }
+    .ileco-nav-badge { position:absolute; top:-7px; right:-7px; background:#ef4444; color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:12px; min-width:20px; text-align:center; line-height:1.4; display:none; box-shadow:0 2px 8px rgba(0,0,0,.35); animation:badge-pop 2s infinite; }
+    @keyframes badge-pop { 0%,100%{transform:scale(1)} 50%{transform:scale(1.18)} }
+    .ileco-header-right { display:flex; align-items:center; gap:10px; margin-left:auto; flex-shrink:0; }
+    .ileco-live-pill { display:flex; align-items:center; gap:6px; padding:6px 13px; border-radius:20px; background:rgba(16,185,129,.15); color:#10b981; font-size:12px; font-weight:700; border:1px solid rgba(16,185,129,.3); white-space:nowrap; }
+    .ileco-live-pill.offline { background:rgba(239,68,68,.12); color:#ef4444; border-color:rgba(239,68,68,.3); }
+    .ileco-live-dot { width:8px; height:8px; border-radius:50%; background:currentColor; animation:live-blink 2s infinite; }
+    @keyframes live-blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+    .ileco-user-widget { position:relative; }
+    .ileco-user-btn { display:flex; align-items:center; gap:9px; padding:6px 13px 6px 6px; background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.14); border-radius:28px; cursor:pointer; transition:all .2s; font-family:inherit; }
+    .ileco-user-btn:hover { background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.24); }
+    .ileco-user-avatar { width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#f5a623,#f59e0b); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:900; color:#0f1c3f; text-transform:uppercase; flex-shrink:0; }
+    .ileco-user-info { text-align:left; line-height:1.2; }
+    .ileco-user-name { font-size:13px; font-weight:700; color:#fff; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .ileco-user-role { font-size:10px; color:rgba(255,255,255,.5); text-transform:uppercase; letter-spacing:.5px; font-weight:600; }
+    .ileco-user-caret { font-size:10px; color:rgba(255,255,255,.45); transition:transform .2s; }
+    .ileco-user-dropdown { display:none; position:absolute; top:calc(100% + 10px); right:0; width:230px; background:#fff; border-radius:14px; box-shadow:0 10px 48px rgba(0,0,0,.22); border:1px solid #e5e7eb; z-index:3000; overflow:hidden; animation:dd-in .15s ease; }
+    .ileco-user-dropdown.open { display:block; }
+    @keyframes dd-in { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+    .ud-head { background:linear-gradient(135deg,#0f1c3f,#1e3270); padding:18px; text-align:center; }
+    .ud-avatar-lg { width:54px; height:54px; border-radius:50%; background:linear-gradient(135deg,#f5a623,#f59e0b); display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:900; color:#0f1c3f; margin:0 auto 10px; text-transform:uppercase; box-shadow:0 4px 14px rgba(0,0,0,.3); }
+    .ud-name { font-size:15px; font-weight:800; color:#fff; }
+    .ud-role { font-size:11px; color:rgba(255,255,255,.5); margin-top:3px; text-transform:uppercase; font-weight:600; }
+    .ud-menu { padding:8px; }
+    .ud-item { display:flex; align-items:center; gap:10px; padding:10px 13px; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600; color:#374151; text-decoration:none; border:none; background:none; width:100%; font-family:inherit; transition:background .15s; }
+    .ud-item:hover { background:#f3f4f6; color:#111827; }
+    .ud-item.danger { color:#dc2626; }
+    .ud-item.danger:hover { background:#fee2e2; }
+    .ud-divider { height:1px; background:#f3f4f6; margin:4px 8px; }
+    .ileco-logout-overlay { display:none; position:fixed; inset:0; background:rgba(15,28,63,.65); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center; }
+    .ileco-logout-overlay.show { display:flex; }
+    .ileco-logout-box { background:#fff; border-radius:18px; padding:36px; max-width:380px; width:90%; text-align:center; box-shadow:0 24px 72px rgba(0,0,0,.32); animation:dd-in .2s ease; }
+    .lo-icon { font-size:52px; margin-bottom:14px; }
+    .lo-title { font-size:22px; font-weight:800; color:#0f1c3f; margin-bottom:8px; }
+    .lo-sub { font-size:14px; color:#6b7280; margin-bottom:28px; line-height:1.6; }
+    .lo-btns { display:flex; gap:14px; justify-content:center; }
+    .lo-btn-cancel { padding:12px 26px; background:#f3f4f6; color:#374151; border:none; border-radius:9px; font-weight:700; cursor:pointer; font-size:14px; font-family:inherit; }
+    .lo-btn-confirm { padding:12px 26px; background:linear-gradient(135deg,#dc2626,#b91c1c); color:#fff; border:none; border-radius:9px; font-weight:700; cursor:pointer; font-size:14px; text-decoration:none; display:inline-flex; align-items:center; gap:7px; }
+
+    /* ── KPI strip ── */
+    .kpi-strip { background:var(--navy-mid); padding:16px 28px; display:grid; grid-template-columns:repeat(5,1fr); gap:12px; border-bottom:2px solid rgba(245,166,35,.25); }
+    .kpi-card { background:rgba(255,255,255,.06); border-radius:var(--radius); padding:14px 16px; display:flex; align-items:center; gap:12px; border:1px solid rgba(255,255,255,.07); transition:background .2s; }
+    .kpi-card:hover { background:rgba(255,255,255,.1); }
+    .kpi-icon { font-size:24px; width:44px; height:44px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .kpi-icon.t{background:rgba(245,166,35,.15);} .kpi-icon.p{background:rgba(59,130,246,.15);} .kpi-icon.i{background:rgba(139,92,246,.15);} .kpi-icon.c{background:rgba(239,68,68,.15);} .kpi-icon.r{background:rgba(16,185,129,.15);}
+    .kpi-val { font-size:26px; font-weight:800; color:var(--gold); line-height:1; font-variant-numeric:tabular-nums; }
+    .kpi-lbl { font-size:11px; font-weight:600; color:rgba(255,255,255,.55); text-transform:uppercase; letter-spacing:.5px; margin-top:2px; }
+
+    /* ── Main layout ── */
+    .main { flex:1; padding:20px 28px; display:flex; flex-direction:column; gap:16px; }
+    .toolbar { background:var(--white); border-radius:var(--radius); padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; box-shadow:var(--shadow-sm); border:1px solid var(--border); }
+    .toolbar-label { font-size:12px; font-weight:600; color:var(--text-mid); text-transform:uppercase; letter-spacing:.5px; flex-shrink:0; }
+    .filter-select,.search-input,.date-input { border:1.5px solid var(--border); border-radius:7px; padding:7px 11px; font-family:'DM Sans',sans-serif; font-size:13px; color:var(--text-dark); background:var(--smoke); transition:border-color .2s,box-shadow .2s; outline:none; }
+    .filter-select:focus,.search-input:focus,.date-input:focus { border-color:var(--navy-light); box-shadow:0 0 0 3px rgba(30,50,112,.08); }
+    .search-input { flex:1; min-width:200px; }
+    .btn { padding:7px 14px; border-radius:7px; border:none; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:5px; }
+    .btn-primary { background:var(--navy); color:#fff; }
+    .btn-primary:hover { background:var(--navy-light); }
+    .btn-ghost { background:var(--smoke); color:var(--text-mid); border:1.5px solid var(--border); }
+    .btn-ghost:hover { background:var(--border); color:var(--text-dark); }
+    .toolbar-spacer { flex:1; }
+
+    /* ── Panel ── */
+    .panel { background:var(--white); border-radius:var(--radius-lg); box-shadow:var(--shadow-md); border:1px solid var(--border); overflow:hidden; flex:1; }
+    .panel-header { background:var(--navy); padding:14px 20px; display:flex; align-items:center; justify-content:space-between; }
+    .panel-title { font-size:15px; font-weight:700; color:var(--white); display:flex; align-items:center; gap:8px; }
+    .panel-subtitle { font-size:12px; color:rgba(255,255,255,.55); font-weight:400; }
+    .panel-actions { display:flex; gap:8px; align-items:center; }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x:auto; overflow-y:auto; max-height:580px; }
+    .table-wrap::-webkit-scrollbar{width:8px;height:8px;} .table-wrap::-webkit-scrollbar-track{background:var(--smoke);} .table-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;} .table-wrap::-webkit-scrollbar-thumb:hover{background:#c0c8da;}
+    .data-table { width:100%; border-collapse:collapse; }
+    .data-table thead { position:sticky; top:0; z-index:5; background:var(--smoke); }
+    .data-table th { padding:10px 14px; text-align:left; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--text-mid); border-bottom:2px solid var(--border); white-space:nowrap; }
+    .data-table td { padding:12px 14px; font-size:13px; color:var(--text-dark); border-bottom:1px solid var(--border); vertical-align:middle; }
+    .data-table tbody tr { transition:background .15s; }
+    .data-table tbody tr:hover { background:#f0f4ff; cursor:pointer; }
+    .data-table tbody tr:last-child td { border-bottom:none; }
+    .data-table tbody tr.is-critical { border-left:3px solid var(--red); }
+
+    /* ── Name cell ── */
+    .name-cell { display:flex; flex-direction:column; gap:1px; }
+    .name-main { font-weight:600; font-size:13px; color:var(--text-dark); }
+    .name-sub { font-size:11px; color:var(--text-light); font-family:'DM Mono',monospace; }
+
+    /* ── Badges ── */
+    .badge { display:inline-flex; align-items:center; gap:4px; padding:4px 9px; border-radius:20px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; white-space:nowrap; }
+    .badge-pending    { background:var(--amber-bg); color:var(--amber-dark); }
+    .badge-assigned   { background:var(--blue-bg); color:var(--blue-dark); }
+    .badge-in_progress{ background:var(--purple-bg); color:var(--purple-dark); }
+    .badge-inprogress { background:var(--purple-bg); color:var(--purple-dark); }
+    .badge-resolved   { background:var(--green-bg); color:var(--green-dark); }
+    .badge-closed     { background:#f3f4f6; color:#374151; }
+    .badge-critical   { background:var(--red-bg); color:var(--red-dark); animation:pulse-red 2s infinite; }
+    .badge-high       { background:var(--amber-bg); color:var(--amber-dark); }
+    .badge-medium     { background:var(--green-bg); color:var(--green-dark); }
+    .badge-low        { background:var(--blue-bg); color:var(--blue-dark); }
+    @keyframes pulse-red{0%,100%{opacity:1}50%{opacity:.7}}
+
+    /* ── Date cell ── */
+    .date-cell { display:flex; flex-direction:column; gap:2px; }
+    .date-main { font-weight:600; font-size:12px; color:var(--text-dark); }
+    .date-time { font-size:11px; color:var(--text-mid); }
+    .date-ago  { font-size:11px; color:var(--text-light); font-style:italic; }
+    .date-issue{ margin-top:4px; padding-top:4px; border-top:1px solid var(--border); }
+    .date-issue-lbl { font-size:10px; color:var(--text-light); }
+
+    /* ── Action buttons ── */
+    .act-btn { padding:5px 10px; border-radius:6px; border:none; font-family:'DM Sans',sans-serif; font-size:11px; font-weight:700; cursor:pointer; transition:all .2s; display:inline-flex; align-items:center; gap:4px; }
+    .act-btn.assign  { background:var(--amber-bg); color:var(--amber-dark); }
+    .act-btn.assign:hover  { background:#fde68a; transform:translateY(-1px); }
+    .act-btn.resolve { background:var(--green-bg); color:var(--green-dark); }
+    .act-btn.resolve:hover { background:#a7f3d0; transform:translateY(-1px); }
+    .act-btn.view    { background:var(--blue-bg); color:var(--blue-dark); }
+    .act-btn.view:hover    { background:#bfdbfe; }
+    .act-btn.remove  { background:var(--red-bg); color:var(--red-dark); }
+    .act-btn.remove:hover  { background:#fecaca; }
+    .act-btn:disabled { opacity:.4; cursor:not-allowed; transform:none!important; }
+
+    /* ── Assigned/Resolved by cell ── */
+    .by-cell { display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border-radius:12px; font-size:11px; font-weight:700; }
+    .by-cell.assigned-by { background:var(--blue-bg); color:var(--blue-dark); }
+    .by-cell.resolved-by { background:var(--green-bg); color:var(--green-dark); }
+
+    /* ── Empty state ── */
+    .empty-state{padding:60px 20px;text-align:center;} .empty-icon{font-size:48px;margin-bottom:12px;} .empty-title{font-size:16px;font-weight:700;color:var(--text-mid);margin-bottom:4px;} .empty-sub{font-size:13px;color:var(--text-light);}
+    .loading-row td{padding:40px;text-align:center;color:var(--text-light);font-style:italic;}
+
+    /* ── Modal ── */
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,28,63,.55);backdrop-filter:blur(3px);z-index:2000;align-items:center;justify-content:center;} .modal-overlay.show{display:flex;}
+    .modal-box{background:var(--white);border-radius:var(--radius-lg);width:90%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:modal-in .2s ease;}
+    @keyframes modal-in{from{transform:scale(.96);opacity:0}to{transform:scale(1);opacity:1}}
+    .modal-header{background:var(--navy);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;border-radius:var(--radius-lg) var(--radius-lg) 0 0;}
+    .modal-title{font-size:16px;font-weight:700;color:var(--white);}
+    .modal-close{background:rgba(255,255,255,.1);border:none;color:#fff;width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background .2s;} .modal-close:hover{background:rgba(255,255,255,.2);}
+    .modal-body{padding:22px;}
+    .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .detail-card{background:var(--smoke);border-radius:8px;padding:12px 14px;border:1px solid var(--border);}
+    .detail-card.full{grid-column:1/-1;}
+    .detail-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-light);margin-bottom:4px;}
+    .detail-val{font-size:14px;font-weight:600;color:var(--text-dark);}
+    .modal-footer{padding:16px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;}
+
+    /* ── Evidence grid in modal ── */
+    .evidence-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:10px;}
+    .evidence-item{background:var(--smoke);border-radius:8px;padding:10px;text-align:center;border:1px solid var(--border);}
+    .evidence-item img{width:100%;height:90px;object-fit:cover;border-radius:6px;margin-bottom:6px;}
+    .evidence-item .ev-name{font-size:11px;color:var(--text-light);word-break:break-all;}
+    .evidence-item .ev-icon{font-size:40px;margin-bottom:6px;}
+
+    /* ── Activity timeline ── */
+    .timeline{padding-left:24px;position:relative;margin-top:10px;}
+    .timeline::before{content:'';position:absolute;left:6px;top:0;bottom:0;width:2px;background:var(--border);}
+    .timeline-item{position:relative;padding:10px 12px;background:var(--smoke);border-radius:8px;margin-bottom:10px;border:1px solid var(--border);}
+    .timeline-item::before{content:'';position:absolute;left:-20px;top:14px;width:10px;height:10px;background:var(--blue);border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 2px var(--blue);}
+    .timeline-type{font-size:12px;font-weight:700;color:var(--blue-dark);}
+    .timeline-desc{font-size:12px;color:var(--text-mid);margin-top:2px;}
+    .timeline-meta{font-size:11px;color:var(--text-light);margin-top:3px;}
+
+    /* ── Confirm delete modal ── */
+    .confirm-overlay{display:none;position:fixed;inset:0;background:rgba(15,28,63,.65);backdrop-filter:blur(4px);z-index:3000;align-items:center;justify-content:center;}
+    .confirm-overlay.show{display:flex;}
+    .confirm-box{background:#fff;border-radius:16px;padding:32px;max-width:420px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3);animation:modal-in .2s ease;}
+    .confirm-icon{font-size:48px;margin-bottom:14px;}
+    .confirm-title{font-size:20px;font-weight:800;color:#111827;margin-bottom:8px;}
+    .confirm-text{font-size:14px;color:#6b7280;margin-bottom:24px;line-height:1.6;}
+    .confirm-btns{display:flex;gap:12px;justify-content:center;}
+    .confirm-btn-cancel{padding:11px 24px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit;}
+    .confirm-btn-danger{padding:11px 24px;background:#ef4444;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;font-family:inherit;transition:background .2s;}
+    .confirm-btn-danger:hover{background:#dc2626;}
+
+    /* ── Toast ── */
+    .toast-container{position:fixed;top:80px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+    .toast{padding:12px 18px;border-radius:9px;font-size:13px;font-weight:600;box-shadow:var(--shadow-md);animation:toast-in .25s ease;max-width:360px;display:flex;align-items:center;gap:8px;}
+    @keyframes toast-in{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+    .toast.success{background:var(--green);color:#fff;} .toast.error{background:var(--red);color:#fff;} .toast.info{background:var(--navy);color:#fff;} .toast.warn{background:var(--amber);color:var(--navy);} .toast.critical{background:#7c3aed;color:#fff;}
+
+    @media(max-width:900px){.kpi-strip{grid-template-columns:repeat(3,1fr);}.detail-grid{grid-template-columns:1fr;}}
+    @media(max-width:600px){.kpi-strip{grid-template-columns:repeat(2,1fr);padding:12px 16px;}.ileco-header{padding:0 16px;}.main{padding:12px 16px;}}
+    </style>
+</head>
+<body>
+
+<!-- ═══ SHARED HEADER ═══ -->
+<header class="ileco-header">
+    <a href="/dashboard" class="ileco-brand">
+    <img src="/static/images/ileco1_logo.png" 
+         alt="ILECO-1" 
+         style="width:52px; height:52px; object-fit:contain; border-radius:8px; flex-shrink:0;">
+    <span>ILECO<span class="accent">-1</span></span>
+</a>
+    <nav class="ileco-nav">
+    <a href="/dashboard"       class="ileco-nav-tab" id="navOutages">
+        <span class="tab-icon">⚡</span> Outage Management Dashboard
+        <span class="ileco-nav-badge" id="outagesBadge">0</span>
+    </a>
+    <a href="/admin/outages"   class="ileco-nav-tab" id="navScheduled">
+        <span class="tab-icon">📅</span> Scheduled Outages
+        <span class="ileco-nav-badge" id="scheduledBadge">0</span>
+    </a>
+    <a href="/meter_dashboard" class="ileco-nav-tab active" id="navMeter">
+        <span class="tab-icon">🔧</span> Meter Monitoring Dashboard
+        <span class="ileco-nav-badge" id="meterBadge">0</span>
+    </a>
+    <a href="/agent_queue"     class="ileco-nav-tab" id="navQueue">
+        <span class="tab-icon">💬</span> Service Desk Operations Dashboard
+        <span class="ileco-nav-badge" id="queueBadge">0</span>
+    </a>
+    <a href="/spam_monitor" class="ileco-nav-tab" id="navSpam">
+    <span class="tab-icon">🛡️</span> Spam Monitor
+    <span class="ileco-nav-badge" id="spamBadge">0</span>
+    </a>
+        <a href="/feature_flags" class="ileco-nav-tab" id="navFlags">
+    <span class="tab-icon">🎛️</span> Feature Flags
+    </a>
+</nav>
+    <div class="ileco-header-right">
+        <div class="ileco-live-pill" id="livePill">
+            <span class="ileco-live-dot"></span>
+            <span id="livePillLabel">Connecting…</span>
+        </div>
+        <div class="ileco-user-widget" id="userWidget">
+            <button class="ileco-user-btn" id="userBtn" onclick="toggleUserDropdown()">
+                <div class="ileco-user-avatar" id="headerAvatar">?</div>
+                <div class="ileco-user-info">
+                    <div class="ileco-user-name" id="headerUsername">Loading…</div>
+                    <div class="ileco-user-role" id="headerRole">staff</div>
+                </div>
+                <span class="ileco-user-caret" id="userCaret">▼</span>
+            </button>
+            <div class="ileco-user-dropdown" id="userDropdown">
+                <div class="ud-head">
+                    <div class="ud-avatar-lg" id="ddAvatar">?</div>
+                    <div class="ud-name" id="ddName">Loading…</div>
+                    <div class="ud-role" id="ddRole">staff</div>
+                </div>
+                <div class="ud-menu">
+                    <a href="/user_management" class="ud-item" id="ddUserMgmt" style="display:none;">
+                        <span>👥</span> User Management
+                    </a>
+                    <div class="ud-divider"></div>
+                    <button class="ud-item danger" onclick="showLogout()">
+                        <span>🚪</span> Sign Out
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- Logout overlay -->
+<div class="ileco-logout-overlay" id="logoutOverlay">
+    <div class="ileco-logout-box">
+        <div class="lo-icon">🚪</div>
+        <div class="lo-title">Sign Out?</div>
+        <div class="lo-sub">Signed in as <strong id="logoutUserName"></strong>.<br>All unsaved data will be lost.</div>
+        <div class="lo-btns">
+            <button class="lo-btn-cancel" onclick="hideLogout()">Cancel</button>
+            <a class="lo-btn-confirm" href="/logout">🚪 Yes, Sign Out</a>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ KPI STRIP ═══ -->
+<section class="kpi-strip">
+    <div class="kpi-card"><div class="kpi-icon t">📊</div><div><div class="kpi-val" id="kpiTotal">—</div><div class="kpi-lbl">Total Concerns</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon p">⏳</div><div><div class="kpi-val" id="kpiPending">—</div><div class="kpi-lbl">Pending</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon i">🔄</div><div><div class="kpi-val" id="kpiInProgress">—</div><div class="kpi-lbl">In Progress</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon c">🚨</div><div><div class="kpi-val" id="kpiCritical">—</div><div class="kpi-lbl">Critical</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon r">✅</div><div><div class="kpi-val" id="kpiResolvedToday">—</div><div class="kpi-lbl">Resolved Today</div></div></div>
+</section>
+
+<main class="main">
+    <div class="toolbar">
+        <span class="toolbar-label">Filters:</span>
+        <select class="filter-select" id="statusFilter" onchange="applyFilters()">
+    <option value="all" selected>All Status</option>
+    <option value="PENDING">Pending</option>
+    <option value="ASSIGNED">Assigned</option>
+    <option value="IN_PROGRESS">In Progress</option>
+    <option value="RESOLVED">Resolved</option>
+    <option value="CLOSED">Closed</option>
+</select>
+        <select class="filter-select" id="priorityFilter" onchange="applyFilters()">
+            <option value="all">All Priority</option>
+            <option value="CRITICAL">🚨 Critical</option>
+            <option value="HIGH">🔴 High</option>
+            <option value="MEDIUM">🟡 Medium</option>
+            <option value="LOW">🔵 Low</option>
+        </select>
+        <select class="filter-select" id="concernTypeFilter" onchange="applyFilters()">
+            <option value="all">All Types</option>
+            <option value="not_working">Not Working</option>
+            <option value="high_consumption">High Consumption</option>
+            <option value="running_fast_slow">Running Fast/Slow</option>
+            <option value="noise_burning">Noise/Burning</option>
+            <option value="tampered_seal">Tampered Seal</option>
+            <option value="others">Others</option>
+        </select>
+        <input type="date" class="date-input" id="dateFilter" onchange="applyFilters()">
+        <input type="text" class="search-input" id="searchInput" placeholder="🔍  Search reference, account, name, barangay…">
+        <div class="toolbar-spacer"></div>
+<button class="btn btn-ghost" onclick="clearFilters()">✕ Clear</button>
+<button class="btn" style="background:#10b981;color:#fff;" onclick="exportMeterConcernsCSV()">⬇ Export CSV</button>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <div>
+                <div class="panel-title">🔧 Meter Concerns Queue</div>
+                <div class="panel-subtitle" id="tableSubtitle">Loading…</div>
+            </div>
+            <div class="panel-actions">
+                <span style="font-size:12px;color:rgba(255,255,255,.5);" id="lastRefreshed">—</span>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Reference #</th>
+                        <th>Consumer</th>
+                        <th>Account #</th>
+                        <th>Barangay</th>
+                        <th>Concern Type</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Reported / Issue Date</th>
+                        <th>Assigned / Resolved By</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr class="loading-row"><td colspan="10">⏳ Loading meter concerns…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<!-- ═══ DETAIL MODAL ═══ -->
+<div class="modal-overlay" id="detailModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <span class="modal-title" id="modalTitle">Concern Details</span>
+            <button class="modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-footer" id="modalFooter"></div>
+    </div>
+</div>
+
+<!-- ═══ CONFIRM DELETE MODAL ═══ -->
+<div class="confirm-overlay" id="confirmModal">
+    <div class="confirm-box">
+        <div class="confirm-icon">🗑️</div>
+        <div class="confirm-title">Remove Concern?</div>
+        <div class="confirm-text" id="confirmText">This will permanently delete this meter concern record and all associated evidence files. This action cannot be undone.</div>
+        <div class="confirm-btns">
+            <button class="confirm-btn-cancel" onclick="closeConfirmModal()">Cancel</button>
+            <button class="confirm-btn-danger" id="confirmDeleteBtn" onclick="executeDelete()">🗑️ Remove</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   SHARED HEADER LOGIC
+═══════════════════════════════════════════════════ */
+(function(){
+    'use strict';
+    function $(id){return document.getElementById(id);}
+    function setText(id,t){var el=$(id);if(el)el.textContent=t;}
+    function getInitials(n){var p=(n||'').trim().split(/\s+/);return p.length>=2?(p[0][0]+p[p.length-1][0]).toUpperCase():(n||'?').substring(0,2).toUpperCase();}
+    function setBadge(id,n){var el=$(id);if(!el)return;el.textContent=n;el.style.display=n>0?'block':'none';}
+
+    async function loadUser(){
+        try{
+            var res=await fetch('/api/me',{credentials:'same-origin'});
+            var d=await res.json();
+            if(!d.success)return;
+            var u=d.user,name=u.full_name||u.username||'?',role=u.role||'staff',ini=getInitials(name);
+            window.CURRENT_USER_ROLE = role;
+            setText('headerAvatar',ini);setText('headerUsername',name);setText('headerRole',role);
+            setText('ddAvatar',ini);setText('ddName',name);setText('ddRole',role);
+            setText('logoutUserName',name);
+            if(role==='admin'||role==='superadmin'){var m=$('ddUserMgmt');if(m)m.style.display='flex';}
+        }catch(e){}
+    }
+    async function loadBadges(){
+        try{
+            var res=await fetch('/api/badge_counts',{credentials:'same-origin'});
+            var d=await res.json();
+            if(!d.success)return;
+            setBadge('outagesBadge',d.counts.outages);
+            setBadge('meterBadge',d.counts.meter);
+            setBadge('queueBadge',d.counts.queue);
+            setBadge('spamBadge', d.counts.spam || 0);   // ← ADD
+        }catch(e){}
+    }
+    window.toggleUserDropdown=function(){
+        var dd=$('userDropdown'),c=$('userCaret');
+        if(!dd)return;
+        var open=dd.classList.toggle('open');
+        if(c)c.style.transform=open?'rotate(180deg)':'';
+    };
+    window.showLogout=function(){var o=$('logoutOverlay');if(o)o.classList.add('show');var dd=$('userDropdown');if(dd)dd.classList.remove('open');};
+    window.hideLogout=function(){var o=$('logoutOverlay');if(o)o.classList.remove('show');};
+    window.setLiveStatus=function(on){
+        var p=$('livePill'),l=$('livePillLabel');
+        if(!p||!l)return;
+        p.className='ileco-live-pill'+(on?'':' offline');
+        l.textContent=on?'Live':'Offline';
+    };
+    window.headerRefreshBadges=loadBadges;
+    document.addEventListener('click',function(e){
+        var uw=$('userWidget');
+        if(uw&&!uw.contains(e.target)){
+            var dd=$('userDropdown');if(dd)dd.classList.remove('open');
+            var c=$('userCaret');if(c)c.style.transform='';
+        }
+    });
+    document.addEventListener('keydown',function(e){
+        if(e.key==='Escape'){
+            hideLogout();
+            var dd=$('userDropdown');if(dd)dd.classList.remove('open');
+        }
+    });
+    function init(){loadUser();loadBadges();setInterval(loadBadges,30000);}
+    if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
+
+/* ═══════════════════════════════════════════════════
+   METER DASHBOARD LOGIC
+═══════════════════════════════════════════════════ */
+let socket=null;
+let allConcerns=[];
+let isRefreshing=false;
+let pendingDeleteId=null;
+let pendingDeleteRef=null;
+let _meterDebounce=null;
+let _refreshTimer=null;
+let _badgeTimer=null;
+const CSRF_TOKEN=document.querySelector('meta[name="csrf-token"]').content;
+
+const CONCERN_TYPE_MAP={
+    'not_working':       'Not Working',
+    'high_consumption':  'High Consumption',
+    'running_fast_slow': 'Running Fast/Slow',
+    'noise_burning':     'Noise/Burning ⚠️',
+    'tampered_seal':     'Tampered Seal',
+    'others':            'Others'
+};
+
+/* ── Helpers ── */
+function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function timeAgo(iso){
+    if(!iso)return '';
+    var diff=Math.floor((Date.now()-new Date(iso))/1000);
+    if(diff<60)return diff+'s ago';
+    if(diff<3600)return Math.floor(diff/60)+'m ago';
+    if(diff<86400)return Math.floor(diff/3600)+'h ago';
+    return new Date(iso).toLocaleDateString('en-PH');
+}
+function formatDateTime(iso){
+    if(!iso)return '—';
+    try{return new Date(iso).toLocaleString('en-PH',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});}catch(e){return iso;}
+}
+function formatDate(iso){
+    if(!iso)return '—';
+    try{return new Date(iso).toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'});}catch(e){return iso;}
+}
+function formatTime(iso){
+    if(!iso)return '';
+    try{return new Date(iso).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true});}catch(e){return '';}
+}
+
+/* ── WebSocket ── */
+function initSocket(){
+    socket=io({
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        transports: ['websocket', 'polling'],
+        upgrade: true
+    });
+    socket.on('connect',()=>{window.setLiveStatus(true);refreshData();});
+    socket.on('disconnect',()=>window.setLiveStatus(false));
+    socket.on('connect_error',()=>window.setLiveStatus(false));
+    socket.on('meter_concern_updated',()=>{
+        clearTimeout(_meterDebounce);
+        _meterDebounce=setTimeout(refreshData,400);
+    });
+    socket.on('critical_meter_concern',(data)=>{
+        showToast('⚠️ Critical: '+data.reference_number,'critical');
+        clearTimeout(_meterDebounce);
+        _meterDebounce=setTimeout(refreshData,400);
+    });
+}
+
+/* ── Data loading ── */
+async function refreshData(){
+    if(isRefreshing)return;
+    isRefreshing=true;
+    var _guard=setTimeout(()=>{isRefreshing=false;},10000);
+    try{
+        var status=document.getElementById('statusFilter').value;
+        var priority=document.getElementById('priorityFilter').value;
+        var concernType=document.getElementById('concernTypeFilter').value;
+        var date=document.getElementById('dateFilter').value;
+
+        var params=new URLSearchParams();
+        if(status&&status!=='all')params.append('status',status);
+        if(priority&&priority!=='all')params.append('priority',priority);
+        if(concernType&&concernType!=='all')params.append('concern_type',concernType);
+        if(date)params.append('date',date);
+
+        var [concernsRes,statsRes]=await Promise.all([
+            fetch('/api/meter-concerns?'+params,{credentials:'same-origin'}),
+            fetch('/api/meter-concerns/statistics',{credentials:'same-origin'})
+        ]);
+        var [concernsData,statsData]=await Promise.all([concernsRes.json(),statsRes.json()]);
+
+        if(concernsData.success){
+            allConcerns=concernsData.data||[];
+        }else{
+            allConcerns=[];
+        }
+        if(statsData.success)updateKPIs(statsData.data);
+
+        renderTable(applySearch(allConcerns));
+        document.getElementById('lastRefreshed').textContent='Updated '+new Date().toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true});
+        window.headerRefreshBadges();
+    }catch(e){
+        showToast('❌ Failed to load data: '+e.message,'error');
+        renderEmpty('Connection error. Retrying…');
+    }finally{
+        clearTimeout(_guard);
+        isRefreshing=false;
+    }
+}
+
+function applySearch(items){
+    var q=(document.getElementById('searchInput').value||'').toLowerCase().trim();
+    if(!q)return items;
+    return items.filter(i=>
+        (i.reference_number||'').toLowerCase().includes(q)||
+        (i.consumer_name||'').toLowerCase().includes(q)||
+        (i.account_number||'').toLowerCase().includes(q)||
+        (i.barangay||'').toLowerCase().includes(q)
+    );
+}
+function applyFilters(){refreshData();}
+function clearFilters(){
+    document.getElementById('statusFilter').value='all';
+    document.getElementById('priorityFilter').value='all';
+    document.getElementById('concernTypeFilter').value='all';
+    document.getElementById('dateFilter').value='';
+    document.getElementById('searchInput').value='';
+    refreshData();
+}
+
+/* ── KPIs ── */
+function updateKPIs(stats){
+    var s=(id,v)=>{var el=document.getElementById(id);if(el)el.textContent=v;};
+    s('kpiTotal',stats.total||0);
+    var byStatus={};
+    (stats.by_status||[]).forEach(x=>byStatus[x.status]=x.count);
+    s('kpiPending',byStatus['PENDING']||0);
+    s('kpiInProgress',byStatus['IN_PROGRESS']||0);
+    var byPriority={};
+    (stats.by_priority||[]).forEach(x=>byPriority[x.priority]=x.count);
+    s('kpiCritical',byPriority['critical']||0);
+    var today=new Date().toISOString().split('T')[0];
+    var resolvedToday=(allConcerns||[]).filter(c=>c.status==='RESOLVED'&&c.resolved_at&&c.resolved_at.startsWith(today)).length;
+    s('kpiResolvedToday',resolvedToday);
+
+    // update meter badge in nav
+    var mb=document.getElementById('meterBadge');
+    if(mb){mb.textContent=byStatus['PENDING']||0;mb.style.display=(byStatus['PENDING']||0)>0?'block':'none';}
+}
+
+/* ── Render table ── */
+function renderTable(items){
+    var tbody=document.getElementById('tableBody');
+    var sub=document.getElementById('tableSubtitle');
+    if(!items||items.length===0){
+        renderEmpty('No meter concerns found matching your filters.');
+        sub.textContent='0 records';
+        return;
+    }
+    sub.textContent=items.length+' record'+(items.length!==1?'s':'');
+
+    tbody.innerHTML=items.map(item=>{
+        var isCritical=(item.priority||'').toLowerCase()==='critical';
+        var statusClass=(item.status||'').toLowerCase().replace('_','');
+        var priClass=(item.priority||'low').toLowerCase();
+
+        // Reported date cell
+        var subDate=item.created_at?new Date(item.created_at):null;
+        var dateMain=subDate?subDate.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}):'—';
+        var dateTime=subDate?subDate.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
+        var dateAgo=item.created_at?timeAgo(item.created_at):'';
+        var dateIssue='';
+        if(item.date_noticed){
+            dateIssue='<div class="date-issue"><div class="date-issue-lbl">Issue noticed:</div><div class="date-main">'+escHtml(item.date_noticed)+'</div></div>';
+        }
+        var dateCell='<div class="date-cell"><div class="date-main">'+escHtml(dateMain)+'</div><div class="date-time">'+escHtml(dateTime)+'</div><div class="date-ago">'+escHtml(dateAgo)+'</div>'+dateIssue+'</div>';
+
+        // Assigned / Resolved by cell
+        var byCell='<span style="color:var(--text-light);font-size:11px;">—</span>';
+        if(item.status==='ASSIGNED'||item.status==='IN_PROGRESS'){
+            if(item.assigned_to){
+                byCell='<span class="by-cell assigned-by">📋 '+escHtml(item.assigned_to)+'</span>';
+            }
+        } else if(item.status==='RESOLVED'||item.status==='CLOSED'){
+            if(item.assigned_to){
+                byCell='<span class="by-cell resolved-by">✅ '+escHtml(item.assigned_to)+'</span>';
+            }
+        }
+
+        // Actions
+        var concernJson=escHtml(JSON.stringify(item));
+        var actions='<button class="act-btn view" onclick="event.stopPropagation();showDetail('+item.id+')">👁 View</button>';
+        if(item.status==='PENDING'){
+            actions+=' <button class="act-btn assign" onclick="event.stopPropagation();updateStatus('+item.id+',\'ASSIGNED\',this)">📋 Assign</button>';
+        } else if(item.status==='ASSIGNED'||item.status==='IN_PROGRESS'){
+            actions+=' <button class="act-btn resolve" onclick="event.stopPropagation();updateStatus('+item.id+',\'RESOLVED\',this)">✓ Resolve</button>';
+        }
+        if (window.CURRENT_USER_ROLE === 'superadmin') {
+            actions+=' <button class="act-btn remove" onclick="event.stopPropagation();confirmRemove('+item.id+',\''+escHtml(item.reference_number)+'\')">🗑 Remove</button>';
+        }
+
+        return '<tr class="'+(isCritical?'is-critical':'')+'" onclick="showDetail('+item.id+')">'
+            +'<td><strong>'+escHtml(item.reference_number||'—')+'</strong></td>'
+            +'<td><div class="name-cell"><span class="name-main">'+escHtml(item.consumer_name||'—')+'</span><span class="name-sub">'+escHtml(item.contact_number||'')+'</span></div></td>'
+            +'<td style="font-family:\'DM Mono\',monospace;font-size:12px;">'+escHtml(item.account_number||'—')+'</td>'
+            +'<td>'+escHtml(item.barangay||'—')+'</td>'
+            +'<td>'+escHtml(CONCERN_TYPE_MAP[item.concern_type]||item.concern_type||'—')+'</td>'
+            +'<td><span class="badge badge-'+priClass+'">'+escHtml(item.priority||'—')+'</span></td>'
+            +'<td><span class="badge badge-'+statusClass+'">'+escHtml(item.status||'—')+'</span></td>'
+            +'<td>'+dateCell+'</td>'
+            +'<td>'+byCell+'</td>'
+            +'<td onclick="event.stopPropagation()">'+actions+'</td>'
+            +'</tr>';
+    }).join('');
+}
+
+function exportMeterConcernsCSV() {
+    var data = applySearch(allConcerns);
+    if (!data || !data.length) { showToast('No records to export', 'info'); return; }
+
+    var header = ['Reference #','Consumer Name','Account #','Contact','Barangay',
+        'Concern Type','Specific Concern','Priority','Status','Date Noticed',
+        'Submitted At','Assigned/Resolved By','Additional Details'];
+
+    var rows = data.map(item => [
+        item.reference_number || '', item.consumer_name || '', item.account_number || '',
+        item.contact_number || '', item.barangay || '',
+        CONCERN_TYPE_MAP[item.concern_type] || item.concern_type || '',
+        item.other_concern || '', item.priority || '', item.status || '',
+        item.date_noticed || '', formatDateTime(item.created_at),
+        item.assigned_to || '', item.additional_details || ''
+    ]);
+
+    var ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    _downloadCSV([header, ...rows], `ileco1_meter_concerns_${ts}.csv`);
+}
+function _csvEscape(v){ if(v==null)return ''; var s=String(v).replace(/"/g,'""'); return /[",\n]/.test(s)?'"'+s+'"':s; }
+function _downloadCSV(rows, filename) {
+    var csv = rows.map(r => r.map(_csvEscape).join(',')).join('\r\n');
+    var blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+function renderEmpty(msg){
+    document.getElementById('tableBody').innerHTML='<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🔧</div><div class="empty-title">No concerns found</div><div class="empty-sub">'+escHtml(msg)+'</div></div></td></tr>';
+    document.getElementById('tableSubtitle').textContent='0 records';
+}
+
+/* ── Session user (auto-resolved from /api/me) ── */
+var session_username='';
+var session_loaded=false;
+async function ensureSessionUser(){
+    if(session_loaded)return;
+    try{
+        var r=await fetch('/api/me',{credentials:'same-origin'});
+        var d=await r.json();
+        if(d.success){session_username=d.user.full_name||d.user.username||'Agent';session_loaded=true;}
+    }catch(e){}
+}
+
+async function updateStatus(id, newStatus, btnEl){
+    var item=allConcerns.find(i=>i.id===id);
+    var name=item?(item.consumer_name||'this concern'):'this concern';
+    if(!confirm('Mark "'+name+'" as '+newStatus+'?'))return;
+
+    if(btnEl){
+        btnEl.disabled=true;
+        btnEl.textContent='⏳ '+newStatus+'…';
+    }
+
+    await ensureSessionUser();
+    var performer=session_username||'Agent';
+
+    try{
+        var res=await fetch('/api/meter-concern/'+id+'/status',{
+            method:'PUT',
+            headers:{
+                'Content-Type':'application/json',
+                'X-CSRFToken':CSRF_TOKEN
+            },
+            credentials:'same-origin',
+            body:JSON.stringify({status:newStatus, assigned_to:performer, notes:''})
+        });
+        var data=await res.json();
+        if(data.success){
+            showToast('✅ '+name+' marked as '+newStatus+(performer?' by '+performer:''),'success');
+            refreshData();
+        }else{
+            showToast('❌ '+(data.error||'Failed'),'error');
+            if(btnEl){btnEl.disabled=false;btnEl.textContent=newStatus==='ASSIGNED'?'📋 Assign':'✓ Resolve';}
+        }
+    }catch(e){
+        showToast('❌ Network error. Please retry.','error');
+        if(btnEl){btnEl.disabled=false;btnEl.textContent=newStatus==='ASSIGNED'?'📋 Assign':'✓ Resolve';}
+    }
+}
+
+/* ── Detail modal ── */
+async function showDetail(id){
+    var item=allConcerns.find(i=>i.id===id);
+    if(!item){showToast('Record not found','error');return;}
+
+    document.getElementById('modalTitle').textContent=item.reference_number||'Concern Details';
+
+    var body=document.getElementById('modalBody');
+    body.innerHTML='<div style="text-align:center;padding:30px;color:var(--text-light);">⏳ Loading details…</div>';
+    document.getElementById('detailModal').classList.add('show');
+
+    try{
+        var res=await fetch('/api/meter-concern/'+item.reference_number,{credentials:'same-origin'});
+        var data=await res.json();
+        if(!data.success)throw new Error(data.error||'Failed');
+        renderDetailModal(data.data, item);
+    }catch(e){
+        body.innerHTML='<div style="text-align:center;padding:30px;color:var(--red);">❌ Failed to load details: '+escHtml(e.message)+'</div>';
+    }
+}
+
+function renderDetailModal(data, concern){
+    var c=data.concern;
+    var evidence=data.evidence||[];
+    var activities=data.activities||[];
+    var statusClass=(c.status||'').toLowerCase().replace('_','');
+    var priClass=(c.priority||'low').toLowerCase();
+    var issueDateDisplay=c.date_noticed?(c.date_noticed+(c.time_noticed?' at '+c.time_noticed:'')):'—';
+
+    var byInfo='';
+    if((c.status==='ASSIGNED'||c.status==='IN_PROGRESS')&&c.assigned_to){
+        byInfo='<div class="detail-card"><div class="detail-lbl">📋 Assigned To</div><div class="detail-val"><span class="by-cell assigned-by">'+escHtml(c.assigned_to)+'</span></div></div>';
+    } else if((c.status==='RESOLVED'||c.status==='CLOSED')&&c.assigned_to){
+        byInfo='<div class="detail-card"><div class="detail-lbl">✅ Resolved By</div><div class="detail-val"><span class="by-cell resolved-by">'+escHtml(c.assigned_to)+'</span></div></div>';
+    }
+
+    var evHtml='';
+    if(evidence.length>0){
+        evHtml='<div style="margin-top:18px;"><div style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">📸 Evidence Files ('+evidence.length+')</div>'
+            +'<div class="evidence-grid">'
+            +evidence.map(e=>{
+                if(e.file_type&&e.file_type.startsWith('image/')){
+                    return '<div class="evidence-item"><a href="'+escHtml(e.file_url||'')+'" target="_blank"><img src="'+escHtml(e.file_url||'')+'" alt="'+escHtml(e.file_name||'')+'" onerror="this.parentElement.innerHTML=\'<div class=ev-icon>🖼️</div>\'"></a><div class="ev-name">'+escHtml(e.file_name||'')+'</div></div>';
+                }
+                return '<div class="evidence-item"><a href="'+escHtml(e.file_url||'')+'" target="_blank"><div class="ev-icon">🎥</div></a><div class="ev-name">'+escHtml(e.file_name||'')+'</div></div>';
+            }).join('')
+            +'</div></div>';
+    }
+
+    var actHtml='';
+    if(activities.length>0){
+        actHtml='<div style="margin-top:18px;"><div style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">📊 Activity Timeline</div>'
+            +'<div class="timeline">'
+            +activities.map(a=>'<div class="timeline-item"><div class="timeline-type">'+escHtml((a.activity_type||'').replace(/_/g,' '))+'</div><div class="timeline-desc">'+escHtml(a.description||'')+'</div><div class="timeline-meta">'+escHtml(a.performed_by||'')+(a.created_at?' · '+formatDateTime(a.created_at):'')+'</div></div>').join('')
+            +'</div></div>';
+    }
+
+    document.getElementById('modalBody').innerHTML=
+        '<div class="detail-grid">'
+        +'<div class="detail-card"><div class="detail-lbl">Consumer Name</div><div class="detail-val">'+escHtml(c.consumer_name||'—')+'</div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Account Number</div><div class="detail-val" style="font-family:\'DM Mono\',monospace;">'+escHtml(c.account_number||'—')+'</div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Contact Number</div><div class="detail-val" style="font-family:\'DM Mono\',monospace;">'+escHtml(c.contact_number||'—')+'</div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Meter Number</div><div class="detail-val" style="font-family:\'DM Mono\',monospace;">'+escHtml(c.meter_number||'—')+'</div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Priority</div><div class="detail-val"><span class="badge badge-'+priClass+'">'+escHtml(c.priority||'—')+'</span></div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Status</div><div class="detail-val"><span class="badge badge-'+statusClass+'">'+escHtml(c.status||'—')+'</span></div></div>'
+        +byInfo
+        +'<div class="detail-card full"><div class="detail-lbl">Service Address</div><div class="detail-val">'+escHtml(c.service_address||'—')+' — '+escHtml(c.barangay||'—')+'</div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Concern Type</div><div class="detail-val">'+escHtml(CONCERN_TYPE_MAP[c.concern_type]||c.concern_type||'—')+'</div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Date &amp; Time Issue Noticed</div><div class="detail-val">'+escHtml(issueDateDisplay)+'</div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Submitted On</div><div class="detail-val">'+escHtml(formatDateTime(c.created_at))+'</div></div>'
+        +(c.other_concern?'<div class="detail-card full"><div class="detail-lbl">Specific Concern</div><div class="detail-val">'+escHtml(c.other_concern)+'</div></div>':'')
+        +(c.additional_details?'<div class="detail-card full"><div class="detail-lbl">Additional Details</div><div class="detail-val">'+escHtml(c.additional_details)+'</div></div>':'')
+        +'<div class="detail-card full" style="background:var(--navy);color:#fff;">'
+        +'<div class="detail-lbl" style="color:rgba(255,255,255,.5);">Reference Number</div>'
+        +'<div class="detail-val" style="color:var(--gold);font-family:\'DM Mono\',monospace;">'+escHtml(c.reference_number||'—')+'</div>'
+        +'</div>'
+        +'</div>'
+        +evHtml
+        +actHtml;
+
+    // Footer buttons
+    var footer=document.getElementById('modalFooter');
+    var btns='<button class="btn btn-ghost" onclick="closeModal()">Close</button>';
+    if(c.status==='PENDING'){
+        btns+='<button class="btn btn-primary" onclick="closeModal();updateStatus('+c.id+',\'ASSIGNED\',null)">📋 Assign</button>';
+    } else if(c.status==='ASSIGNED'||c.status==='IN_PROGRESS'){
+        btns+='<button class="btn" style="background:var(--green);color:#fff;" onclick="closeModal();updateStatus('+c.id+',\'RESOLVED\',null)">✓ Resolve</button>';
+    }
+    if (window.CURRENT_USER_ROLE === 'superadmin') {
+        btns+='<button class="btn" style="background:var(--red-bg);color:var(--red-dark);" onclick="closeModal();confirmRemove('+c.id+',\''+escHtml(c.reference_number)+'\')">🗑 Remove</button>';
+    }
+    footer.innerHTML=btns;
+}
+
+function closeModal(){document.getElementById('detailModal').classList.remove('show');}
+
+/* ── Confirm delete ── */
+function confirmRemove(id,ref){
+    pendingDeleteId=id;
+    pendingDeleteRef=ref;
+    document.getElementById('confirmText').textContent='This will permanently delete concern '+ref+' and all associated evidence files. This action cannot be undone.';
+    document.getElementById('confirmModal').classList.add('show');
+}
+function closeConfirmModal(){
+    document.getElementById('confirmModal').classList.remove('show');
+    pendingDeleteId=null;pendingDeleteRef=null;
+}
+async function executeDelete(){
+    if(!pendingDeleteId)return;
+    var btn=document.getElementById('confirmDeleteBtn');
+    btn.disabled=true;btn.textContent='⏳ Removing…';
+    try{
+        var res=await fetch('/api/meter-concern/'+pendingDeleteId,{
+            method:'DELETE',
+            headers:{
+                'X-CSRFToken':CSRF_TOKEN
+            },
+            credentials:'same-origin'
+        });
+        var data=await res.json();
+        if(data.success){
+            showToast('🗑 Concern '+pendingDeleteRef+' removed.','success');
+            closeConfirmModal();closeModal();refreshData();
+        }else{
+            showToast('❌ '+(data.error||'Failed to remove'),'error');
+        }
+    }catch(e){
+        showToast('❌ Network error.','error');
+    }finally{
+        btn.disabled=false;btn.textContent='🗑️ Remove';
+    }
+}
+
+/* ── Toast ── */
+function showToast(msg,type='info'){
+    var c=document.getElementById('toastContainer'),t=document.createElement('div');
+    t.className='toast '+type;t.textContent=msg;c.appendChild(t);
+    setTimeout(()=>t.remove(),4500);
+}
+
+/* ── Event listeners ── */
+document.getElementById('searchInput').addEventListener('input',()=>{renderTable(applySearch(allConcerns));});
+document.getElementById('detailModal').addEventListener('click',e=>{if(e.target.id==='detailModal')closeModal();});
+document.getElementById('confirmModal').addEventListener('click',e=>{if(e.target.id==='confirmModal')closeConfirmModal();});
+document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){
+        if(document.getElementById('confirmModal').classList.contains('show'))closeConfirmModal();
+        else closeModal();
+        hideLogout();
+    }
+});
+
+/* ── Init ── */
+document.addEventListener('DOMContentLoaded',()=>{
+    ensureSessionUser();
+    initSocket();
+    refreshData();
+    if(_refreshTimer)clearInterval(_refreshTimer);
+    _refreshTimer=setInterval(refreshData,60000);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshData();});
+});
+</script>
+</body>
+</html>

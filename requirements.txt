@@ -1,0 +1,29 @@
+# Core
+flask==3.0.3
+flask-socketio==5.3.6
+flask-cors==4.0.1
+flask-limiter==3.7.0
+flask-wtf==1.2.1
+
+# WSGI server (Cloud Run via Procfile/buildpacks)
+gunicorn==22.0.0
+eventlet==0.36.1
+
+# Database
+psycopg2-binary==2.9.9
+
+# Auth / security
+werkzeug==3.0.3
+python-dotenv==1.0.1
+pytz==2024.1
+
+# Utilities
+requests==2.32.3
+dnspython==2.6.1
+
+# Rate limiting backend
+redis==5.0.7
+psycogreen
+eventlet
+psycogreen
+APScheduler

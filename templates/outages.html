@@ -1,0 +1,821 @@
+{% extends "base.html" %}
+{% block title %}ILECO-1 | Scheduled Outages{% endblock %}
+{% block nav_scheduled %}active{% endblock %}
+
+{% block head_css %}
+<style>
+:root {
+    --navy: #0f1c3f;
+    --navy-mid: #162550;
+    --navy-light: #1e3270;
+    --gold: #f5a623;
+    --gold-light: #fbbf47;
+    --white: #ffffff;
+    --smoke: #f4f6fb;
+    --border: #dde3f0;
+    --text-dark: #0f1c3f;
+    --text-mid: #4a5578;
+    --text-light: #8892aa;
+    --green: #10b981;
+    --green-bg: #d1fae5;
+    --green-dark: #065f46;
+    --red: #ef4444;
+    --red-bg: #fee2e2;
+    --red-dark: #991b1b;
+    --amber: #f59e0b;
+    --amber-bg: #fef3c7;
+    --amber-dark: #92400e;
+    --blue: #3b82f6;
+    --blue-bg: #dbeafe;
+    --blue-dark: #1e40af;
+    --shadow-sm: 0 1px 3px rgba(15,28,63,.08);
+    --shadow-md: 0 4px 16px rgba(15,28,63,.12);
+    --radius: 10px;
+    --radius-lg: 16px;
+}
+
+/* ═══ PAGE BANNER ═══ */
+.page-banner {
+    background: linear-gradient(135deg, var(--navy-mid) 0%, var(--navy-light) 100%);
+    padding: 22px 28px;
+    border-bottom: 2px solid rgba(245,166,35,.25);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+.page-banner-left { display: flex; flex-direction: column; gap: 4px; }
+.page-banner-title {
+    font-size: 20px; font-weight: 800; color: #fff;
+    display: flex; align-items: center; gap: 10px;
+}
+.page-banner-sub { font-size: 13px; color: rgba(255,255,255,.55); font-weight: 500; }
+.add-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 22px;
+    background: var(--gold);
+    color: var(--navy);
+    border: none; border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px; font-weight: 800;
+    cursor: pointer; text-decoration: none;
+    transition: all .2s;
+    box-shadow: 0 4px 14px rgba(245,166,35,.35);
+}
+.add-btn:hover {
+    background: var(--gold-light);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(245,166,35,.45);
+}
+
+/* ═══ KPI STRIP ═══ */
+.kpi-strip {
+    background: var(--navy);
+    padding: 14px 28px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+}
+.kpi-card {
+    background: rgba(255,255,255,.06);
+    border-radius: var(--radius);
+    padding: 13px 16px;
+    display: flex; align-items: center; gap: 12px;
+    border: 1px solid rgba(255,255,255,.07);
+}
+.kpi-icon {
+    font-size: 22px; width: 42px; height: 42px;
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.kpi-icon.total  { background: rgba(245,166,35,.15); }
+.kpi-icon.active { background: rgba(16,185,129,.15); }
+.kpi-icon.future { background: rgba(59,130,246,.15); }
+.kpi-icon.past   { background: rgba(139,92,246,.15); }
+.kpi-val  { font-size: 24px; font-weight: 800; color: var(--gold); line-height: 1; }
+.kpi-lbl  { font-size: 11px; font-weight: 600; color: rgba(255,255,255,.5); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+
+/* ═══ ALERTS ═══ */
+.alerts-zone { padding: 14px 28px 0; }
+.alert {
+    padding: 12px 16px; border-radius: var(--radius);
+    font-size: 13px; font-weight: 600; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+}
+.alert-success { background: var(--green-bg); color: var(--green-dark); border: 1px solid #a7f3d0; }
+.alert-danger   { background: var(--red-bg);   color: var(--red-dark);   border: 1px solid #fca5a5; }
+.alert-warning  { background: var(--amber-bg); color: var(--amber-dark); border: 1px solid #fde68a; }
+
+/* ═══ MAIN CONTENT ═══ */
+.main { flex: 1; padding: 20px 28px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ═══ TOOLBAR ═══ */
+.toolbar {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 11px 16px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border);
+}
+.filter-select, .search-input {
+    border: 1.5px solid var(--border);
+    border-radius: 7px; padding: 7px 11px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    color: var(--text-dark); background: var(--smoke);
+    transition: border-color .2s; outline: none;
+}
+.filter-select:focus, .search-input:focus {
+    border-color: var(--navy-light);
+    box-shadow: 0 0 0 3px rgba(30,50,112,.08);
+}
+.search-input { flex: 1; min-width: 200px; }
+.toolbar-spacer { flex: 1; }
+.clear-btn {
+    padding: 7px 14px; border-radius: 7px; border: 1.5px solid var(--border);
+    background: var(--smoke); color: var(--text-mid);
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all .2s;
+}
+.clear-btn:hover { background: var(--border); color: var(--text-dark); }
+
+/* ═══ PANEL ═══ */
+.panel {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    flex: 1;
+}
+.panel-header {
+    background: var(--navy);
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.panel-title {
+    font-size: 15px; font-weight: 700; color: var(--white);
+    display: flex; align-items: center; gap: 8px;
+}
+.panel-subtitle { font-size: 12px; color: rgba(255,255,255,.5); font-weight: 400; }
+.panel-meta { font-size: 12px; color: rgba(255,255,255,.5); }
+
+/* ═══ TABLE ═══ */
+.table-wrap {
+    overflow-x: auto; overflow-y: auto; max-height: 620px;
+    scrollbar-width: thin; scrollbar-color: var(--border) var(--smoke);
+}
+.table-wrap::-webkit-scrollbar { width: 8px; height: 8px; }
+.table-wrap::-webkit-scrollbar-track { background: var(--smoke); }
+.table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table thead { position: sticky; top: 0; z-index: 5; }
+.data-table th {
+    padding: 10px 16px; text-align: left;
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .6px; color: var(--text-mid);
+    background: var(--smoke); border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+}
+.data-table td {
+    padding: 13px 16px; font-size: 13px; color: var(--text-dark);
+    border-bottom: 1px solid var(--border); vertical-align: middle;
+}
+.data-table tbody tr { transition: background .15s; }
+.data-table tbody tr:hover { background: #f0f4ff; }
+.data-table tbody tr.inactive-row { opacity: .65; }
+.data-table tbody tr:last-child td { border-bottom: none; }
+
+/* ═══ DATE CELL ═══ */
+.date-cell { display: flex; flex-direction: column; gap: 2px; }
+.date-main { font-weight: 700; font-size: 13px; color: var(--text-dark); }
+.date-day  { font-size: 11px; color: var(--text-mid); }
+.time-range {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500;
+    color: var(--text-mid);
+}
+.time-sep { color: var(--text-light); }
+.duration-pill {
+    display: inline-flex; align-items: center;
+    padding: 2px 8px; border-radius: 8px;
+    background: var(--blue-bg); color: var(--blue-dark);
+    font-size: 10px; font-weight: 700;
+    margin-top: 3px;
+}
+
+/* ═══ REASON CELL ═══ */
+.reason-text { font-size: 13px; color: var(--text-dark); font-weight: 500; max-width: 280px; }
+.reason-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; color: var(--blue); font-weight: 700;
+    text-decoration: none; margin-top: 4px; transition: color .15s;
+}
+.reason-link:hover { color: var(--blue-dark); }
+
+/* ═══ AREAS CELL ═══ */
+.areas-pill-wrap { display: flex; flex-wrap: wrap; gap: 4px; max-width: 260px; }
+.area-pill {
+    padding: 3px 8px; border-radius: 8px;
+    background: var(--amber-bg); color: var(--amber-dark);
+    font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.area-pill.more {
+    background: var(--smoke); color: var(--text-mid);
+    border: 1px solid var(--border);
+}
+
+/* ═══ TOWNS CELL ═══ */
+.towns-cell { font-size: 12px; color: var(--text-mid); font-weight: 600; }
+
+/* ═══ STATUS BADGE ═══ */
+.badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 5px 11px; border-radius: 20px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .3px; white-space: nowrap;
+}
+.badge-active   { background: var(--green-bg); color: var(--green-dark); }
+.badge-inactive { background: var(--smoke); color: var(--text-mid); border: 1px solid var(--border); }
+.badge-upcoming { background: var(--blue-bg); color: var(--blue-dark); }
+.badge-past     { background: #f3f4f6; color: #6b7280; }
+.badge-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.badge-active .badge-dot { animation: pulse-dot 2s infinite; }
+@keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ═══ ACTIONS ═══ */
+.act-group { display: flex; gap: 5px; flex-wrap: wrap; }
+.act-btn {
+    padding: 6px 12px; border-radius: 7px; border: none;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: all .2s;
+    display: inline-flex; align-items: center; gap: 5px;
+    text-decoration: none;
+}
+.act-btn.edit  { background: var(--amber-bg); color: var(--amber-dark); }
+.act-btn.edit:hover  { background: #fde68a; transform: translateY(-1px); }
+.act-btn.toggle { background: var(--smoke); color: var(--text-mid); border: 1.5px solid var(--border); }
+.act-btn.toggle:hover { background: var(--border); color: var(--text-dark); }
+.act-btn.toggle.deact { background: var(--green-bg); color: var(--green-dark); border-color: #a7f3d0; }
+.act-btn.toggle.deact:hover { background: #a7f3d0; }
+.act-btn.del  { background: var(--red-bg); color: var(--red-dark); }
+.act-btn.del:hover  { background: #fecaca; transform: translateY(-1px); }
+
+/* ═══ EMPTY STATE ═══ */
+.empty-state { padding: 60px 20px; text-align: center; }
+.empty-icon  { font-size: 52px; margin-bottom: 14px; }
+.empty-title { font-size: 17px; font-weight: 700; color: var(--text-mid); margin-bottom: 6px; }
+.empty-sub   { font-size: 13px; color: var(--text-light); }
+
+/* ═══ CONFIRM OVERLAY ═══ */
+.confirm-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(15,28,63,.65); backdrop-filter: blur(4px);
+    z-index: 3000; align-items: center; justify-content: center;
+}
+.confirm-overlay.show { display: flex; }
+.confirm-box {
+    background: #fff; border-radius: 18px; padding: 36px;
+    max-width: 420px; width: 90%; text-align: center;
+    box-shadow: 0 24px 72px rgba(0,0,0,.3);
+    animation: pop-in .2s ease;
+}
+@keyframes pop-in { from{transform:scale(.94);opacity:0} to{transform:scale(1);opacity:1} }
+.confirm-icon  { font-size: 52px; margin-bottom: 14px; }
+.confirm-title { font-size: 20px; font-weight: 800; color: var(--navy); margin-bottom: 8px; }
+.confirm-text  { font-size: 14px; color: #6b7280; margin-bottom: 26px; line-height: 1.6; }
+.confirm-btns  { display: flex; gap: 12px; justify-content: center; }
+.confirm-cancel { padding: 11px 24px; background: #f3f4f6; color: #374151; border: none; border-radius: 9px; font-weight: 700; cursor: pointer; font-size: 14px; font-family: inherit; }
+.confirm-delete { padding: 11px 24px; background: var(--red); color: #fff; border: none; border-radius: 9px; font-weight: 700; cursor: pointer; font-size: 14px; font-family: inherit; transition: background .2s; }
+.confirm-delete:hover { background: #dc2626; }
+
+/* ═══ CHATBOT PREVIEW PANEL ═══ */
+.chatbot-preview {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border);
+    overflow: hidden;
+}
+.chatbot-preview-header {
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.chatbot-preview-title {
+    font-size: 14px; font-weight: 700; color: #fff;
+    display: flex; align-items: center; gap: 8px;
+}
+.chatbot-preview-body { padding: 16px 20px; }
+.preview-outage-card {
+    background: var(--smoke);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    border-left: 4px solid var(--gold);
+}
+.preview-outage-card.inactive-card { border-left-color: var(--border); opacity: .6; }
+.preview-date-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; background: var(--amber-bg); color: var(--amber-dark);
+    border-radius: 8px; font-size: 12px; font-weight: 700; margin-bottom: 8px;
+}
+.preview-reason { font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 6px; }
+.preview-meta   { font-size: 12px; color: var(--text-mid); display: flex; gap: 12px; flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+    .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+    .main { padding: 12px 16px; }
+    .page-banner { padding: 16px; }
+    .alerts-zone { padding: 10px 16px 0; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ═══ PAGE BANNER ═══ -->
+<div class="page-banner">
+    <div class="page-banner-left">
+        <div class="page-banner-title">
+            📅 Scheduled Power Interruptions
+        </div>
+        <div class="page-banner-sub">
+            Manage outage advisories · Updates automatically push to the Rasa chatbot
+        </div>
+    </div>
+    <a href="{{ url_for('admin_add_outage') }}" class="add-btn">
+        ＋ Add New Outage
+    </a>
+</div>
+
+<!-- ═══ KPI STRIP ═══ -->
+<div class="kpi-strip">
+    <div class="kpi-card">
+        <div class="kpi-icon total">📊</div>
+        <div>
+            <div class="kpi-val" id="kpiTotal">{{ outages|length }}</div>
+            <div class="kpi-lbl">Total Records</div>
+        </div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon active">✅</div>
+        <div>
+            <div class="kpi-val" id="kpiActive">{{ outages|selectattr('is_active')|list|length }}</div>
+            <div class="kpi-lbl">Active Advisories</div>
+        </div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon future">🔮</div>
+        <div>
+            <div class="kpi-val" id="kpiUpcoming">—</div>
+            <div class="kpi-lbl">Upcoming (7 days)</div>
+        </div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-icon past">📁</div>
+        <div>
+            <div class="kpi-val" id="kpiPast">—</div>
+            <div class="kpi-lbl">Past Outages</div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ FLASH MESSAGES ═══ -->
+<div class="alerts-zone">
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }}">
+        {% if category == 'success' %}✅{% elif category == 'danger' %}❌{% else %}⚠️{% endif %}
+        {{ message }}
+    </div>
+    {% endfor %}
+{% endwith %}
+</div>
+
+<!-- ═══ MAIN ═══ -->
+<main class="main">
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+        <span style="font-size:12px;font-weight:600;color:var(--text-mid);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0;">Filters:</span>
+        <select class="filter-select" id="statusFilter" onchange="filterTable()">
+            <option value="all">All Status</option>
+            <option value="active">Active Only</option>
+            <option value="inactive">Inactive Only</option>
+        </select>
+        <select class="filter-select" id="timeFilter" onchange="filterTable()">
+            <option value="all">All Dates</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="past">Past</option>
+            <option value="today">Today</option>
+        </select>
+        <input type="text" class="search-input" id="searchInput"
+               placeholder="🔍  Search reason, town, barangay…"
+               oninput="filterTable()">
+        <div class="toolbar-spacer"></div>
+        <button class="clear-btn" onclick="clearFilters()">✕ Clear</button>
+    </div>
+
+    <!-- OUTAGE TABLE -->
+    <div class="panel">
+        <div class="panel-header">
+            <div>
+                <div class="panel-title">⚡ Outage Advisory List</div>
+                <div class="panel-subtitle">
+            Visible to chatbot: only Active records with a future or today date are served.
+    Chatbot filters by town — ensure the <strong>Towns</strong> field is filled correctly.
+</div>
+            </div>
+            <div class="panel-meta" id="tableCount">
+                {{ outages|length }} record{% if outages|length != 1 %}s{% endif %}
+            </div>
+        </div>
+
+        <div class="table-wrap">
+            <table class="data-table" id="outageTable">
+                <thead>
+                    <tr>
+                        <th>Date &amp; Time</th>
+                        <th>Reason / Advisory</th>
+                        <th>Affected Areas</th>
+                        <th>Towns</th>
+                        <th>Status</th>
+                        <th>Chatbot Visibility</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="outageBody">
+                {% if outages %}
+                    {% for o in outages %}
+                    <tr class="{{ 'inactive-row' if not o.is_active }}"
+                        data-date="{{ o.outage_date.strftime('%Y-%m-%d') if o.outage_date else '' }}"
+                        data-active="{{ 'true' if o.is_active else 'false' }}"
+                        data-start="{{ o.start_time.strftime('%H:%M') if o.start_time else '' }}"
+                        data-end="{{ o.end_time.strftime('%H:%M') if o.end_time else '' }}"
+                        data-towns="{{ (o.towns or [])|join(' ')|lower }}"
+                        data-reason="{{ o.reason|lower }}">
+
+                        <!-- DATE / TIME -->
+                        <td>
+    <div class="date-cell">
+        {% if o.outage_date %}
+        <div class="date-main">{{ o.outage_date.strftime('%b %d, %Y') }}</div>
+        <div class="date-day">{{ o.outage_date.strftime('%A') }}</div>
+        {% else %}
+        <div class="date-main" style="color:var(--text-light);">No date set</div>
+        {% endif %}
+        {% if o.start_time and o.end_time %}
+        <div class="time-range">
+            {{ o.start_time.strftime('%I:%M %p') }}
+            <span class="time-sep">→</span>
+            {{ o.end_time.strftime('%I:%M %p') }}
+        </div>
+        <span class="duration-pill" id="dur-{{ loop.index }}">⏱ Computing…</span>
+        {% endif %}
+    </div>
+</td>
+
+                      <td>
+    {% if o.reason %}
+    <div class="reason-text" title="{{ o.reason }}">
+        {{ o.reason[:80] }}{% if o.reason|length > 80 %}…{% endif %}
+    </div>
+    {% else %}
+    <div class="reason-text" style="color:var(--text-light);">— (image only)</div>
+    {% endif %}
+    {% if o.image_url %}
+    <div style="margin-top:6px;">
+        <img src="{{ o.image_url }}" alt="Advisory image"
+             style="max-width:120px;max-height:70px;border-radius:6px;
+                    border:1.5px solid var(--border);object-fit:cover;
+                    cursor:pointer;"
+             onclick="window.open('{{ o.image_url }}','_blank')"
+             title="Click to view full image">
+    </div>
+    {% endif %}
+</td>
+
+                        <!-- AFFECTED AREAS -->
+                        <td>
+                            <div class="areas-pill-wrap">
+                                {% set areas = o.affected_areas if o.affected_areas is iterable and o.affected_areas is not string else [] %}
+                                {% for area in areas[:3] %}
+                                <span class="area-pill">{{ area[:40] }}{% if area|length > 40 %}…{% endif %}</span>
+                                {% endfor %}
+                                {% if areas|length > 3 %}
+                                <span class="area-pill more" title="{{ areas[3:]|join(', ') }}">
+                                    +{{ areas|length - 3 }} more
+                                </span>
+                                {% endif %}
+                                {% if not areas %}
+                                <span style="color:var(--text-light);font-size:12px;">No areas listed</span>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <!-- TOWNS -->
+                        <td>
+                            <div class="towns-cell">{{ (o.towns or [])|join(', ') or '—' }}</div>
+                        </td>
+
+                        <!-- STATUS -->
+                        <td>
+                            {% if o.is_active %}
+                            <span class="badge badge-active"><span class="badge-dot"></span> Active</span>
+                            {% else %}
+                            <span class="badge badge-inactive"><span class="badge-dot"></span> Inactive</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- CHATBOT VISIBILITY — filled by JS -->
+                        <td id="vis-{{ loop.index }}">
+                            <span style="color:var(--text-light);font-size:11px;">…</span>
+                        </td>
+
+                        <!-- ACTIONS -->
+                        <td>
+                            <div class="act-group">
+                                <a href="{{ url_for('admin_edit_outage', outage_id=o.id) }}"
+                                   class="act-btn edit">✏️ Edit</a>
+
+                                <form method="POST"
+      action="{{ url_for('admin_toggle_outage', outage_id=o.id) }}"
+      style="display:inline;margin:0;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit"
+            class="act-btn toggle {{ 'deact' if o.is_active }}">
+        {{ '🔕 Deactivate' if o.is_active else '🔔 Activate' }}
+    </button>
+</form>
+
+                                {% set safe_date = o.outage_date.strftime('%b %d, %Y') if o.outage_date else 'No date set' %}
+                                {% set safe_reason = o.reason[:40] | replace("'", "") | replace('"', '') %}
+                                <button type="button"
+                                        class="act-btn del"
+                                        data-id="{{ o.id }}"
+                                        data-date="{{ safe_date }}"
+                                        data-reason="{{ safe_reason }}"
+                                        onclick="confirmDelete(this.dataset.id, this.dataset.date, this.dataset.reason)">
+                                    🗑 Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="7">
+                            <div class="empty-state">
+                                <div class="empty-icon">📅</div>
+                                <div class="empty-title">No scheduled outages yet</div>
+                                <div class="empty-sub">
+                                    Click <strong>+ Add New Outage</strong> to create the first advisory.<br>
+                                    It will immediately be available to the Rasa chatbot.
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- CHATBOT PREVIEW INFO CARD -->
+    <div class="chatbot-preview">
+        <div class="chatbot-preview-header">
+            <div class="chatbot-preview-title">🤖 How This Feeds the Rasa Chatbot</div>
+            <span style="font-size:12px;color:rgba(255,255,255,.5);">Live preview — next 3 active advisories</span>
+        </div>
+        <div class="chatbot-preview-body">
+            <p style="font-size:13px;color:var(--text-mid);margin-bottom:14px;line-height:1.6;">
+                When a consumer asks <em>"Are there any scheduled outages?"</em>, the Rasa
+                <code style="background:#f0f4ff;padding:1px 5px;border-radius:4px;font-size:12px;">ActionFetchOutageInfo</code>
+                action queries <code style="background:#f0f4ff;padding:1px 5px;border-radius:4px;font-size:12px;">scheduled_outages</code>
+                directly — only rows where <strong>is_active = true</strong> and
+                <strong>outage_date ≥ today</strong> are returned.
+                Editing or toggling a record here takes effect immediately, no bot restart needed.
+            </p>
+            <div id="chatbotPreview">
+                <div style="color:var(--text-light);font-size:13px;text-align:center;padding:20px;">
+                    ⏳ Building preview…
+                </div>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<!-- ═══ CONFIRM DELETE OVERLAY ═══ -->
+<div class="confirm-overlay" id="confirmOverlay">
+    <div class="confirm-box">
+        <div class="confirm-icon">🗑️</div>
+        <div class="confirm-title">Delete This Outage?</div>
+        <div class="confirm-text" id="confirmText">
+            This will permanently remove the outage advisory. This action cannot be undone.
+        </div>
+        <div class="confirm-btns">
+            <button class="confirm-cancel" onclick="closeConfirm()">Cancel</button>
+            <button class="confirm-delete" id="confirmDeleteBtn">🗑 Yes, Delete</button>
+        </div>
+    </div>
+</div>
+
+<form method="POST" id="deleteForm" style="display:none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+</form>
+
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+/* ── DURATION CALCULATOR ── */
+function calcDuration(startStr, endStr) {
+    var sp = startStr.split(':').map(Number);
+    var ep = endStr.split(':').map(Number);
+    var mins = (ep[0]*60 + ep[1]) - (sp[0]*60 + sp[1]);
+    if (mins <= 0) mins += 1440; // overnight
+    if (mins < 60) return mins + ' min';
+    var h = Math.floor(mins/60), m = mins%60;
+    return h + 'h' + (m ? ' '+m+'m' : '');
+}
+
+function visTagByStr(isActive, dateStr) {
+    // Build today string in local tz
+    var n = new Date();
+    var todayStr = n.getFullYear() + '-'
+        + String(n.getMonth() + 1).padStart(2, '0') + '-'
+        + String(n.getDate()).padStart(2, '0');
+
+    if (!isActive)
+        return '<span class="badge badge-inactive" style="font-size:10px;">🙈 Hidden — Inactive</span>';
+    if (!dateStr)
+        return '<span class="badge badge-upcoming" style="font-size:10px;">🔮 Upcoming (no date)</span>';
+    if (dateStr < todayStr)
+        return '<span class="badge badge-past" style="font-size:10px;">📁 Past</span>';
+    if (dateStr === todayStr)
+        return '<span class="badge badge-active" style="font-size:10px;">📡 Live Today</span>';
+    return '<span class="badge badge-upcoming" style="font-size:10px;">🔮 Upcoming</span>';
+}
+
+function escHtml(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var rows    = document.querySelectorAll('#outageBody tr[data-date]');
+
+    // Build today's string in YYYY-MM-DD in LOCAL timezone (not UTC)
+    var nowLocal = new Date();
+    var todayStr = nowLocal.getFullYear() + '-'
+        + String(nowLocal.getMonth() + 1).padStart(2, '0') + '-'
+        + String(nowLocal.getDate()).padStart(2, '0');
+
+    var upcoming = 0, past = 0;
+    var previewItems = [];
+
+    rows.forEach(function(row, i) {
+        var idx      = i + 1;
+        var dateStr  = row.dataset.date;   // "YYYY-MM-DD" or ""
+        var isActive = row.dataset.active === 'true';
+
+        /* Duration pill */
+        var durEl = document.getElementById('dur-' + idx);
+        if (durEl && row.dataset.start && row.dataset.end) {
+            durEl.textContent = '⏱ ' + calcDuration(row.dataset.start, row.dataset.end);
+        } else if (durEl) {
+            durEl.textContent = '';
+        }
+
+        /* Visibility tag — compare date STRINGS to avoid tz shift */
+        var visEl = document.getElementById('vis-' + idx);
+        if (visEl) visEl.innerHTML = visTagByStr(isActive, dateStr);
+
+        /* KPI counters — use string comparison */
+        if (dateStr) {
+            // Upcoming = today OR within 7 days
+            var in7DaysDate = new Date(nowLocal);
+            in7DaysDate.setDate(in7DaysDate.getDate() + 7);
+            var in7DaysStr  = in7DaysDate.getFullYear() + '-'
+                + String(in7DaysDate.getMonth() + 1).padStart(2, '0') + '-'
+                + String(in7DaysDate.getDate()).padStart(2, '0');
+
+            if (isActive && dateStr >= todayStr && dateStr <= in7DaysStr) upcoming++;
+            if (dateStr < todayStr) past++;
+        } else {
+            // NULL date — treat as upcoming if active
+            if (isActive) upcoming++;
+        }
+
+        /* Chatbot preview (active + future/today or no date, max 3) */
+        var isUpcoming = !dateStr || dateStr >= todayStr;
+        if (isActive && isUpcoming && previewItems.length < 3) {
+            previewItems.push({
+                date:   dateStr,
+                reason: row.querySelector('.reason-text')?.textContent.trim() || '',
+                towns:  row.querySelector('.towns-cell')?.textContent.trim() || '—',
+                timeR:  (row.querySelector('.time-range')?.textContent || '').trim().replace(/\s+/g,' ')
+            });
+        }
+    });
+
+    document.getElementById('kpiUpcoming').textContent = upcoming;
+    document.getElementById('kpiPast').textContent     = past;
+
+    /* Chatbot preview panel */
+    var previewEl = document.getElementById('chatbotPreview');
+    if (previewItems.length === 0) {
+        previewEl.innerHTML = '<div style="color:var(--text-light);font-size:13px;text-align:center;padding:20px;">✅ No upcoming active advisories. Chatbot will respond with the "no scheduled outage" message.</div>';
+    } else {
+        previewEl.innerHTML = previewItems.map(function(p) {
+            var label;
+            if (p.date) {
+                label = new Date(p.date + 'T12:00:00')  // noon avoids any DST edge
+                    .toLocaleDateString('en-PH', {
+                        weekday:'long', year:'numeric',
+                        month:'long',  day:'numeric'
+                    });
+            } else {
+                label = 'Date to be announced';
+            }
+            return '<div class="preview-outage-card">'
+                + '<div class="preview-date-badge">🗓️ ' + label + '</div>'
+                + '<div class="preview-reason">' + escHtml(p.reason) + '</div>'
+                + '<div class="preview-meta">'
+                + '<span>🕒 ' + escHtml(p.timeR || 'Time TBD') + '</span>'
+                + '<span>🏘️ ' + escHtml(p.towns) + '</span>'
+                + '</div></div>';
+        }).join('');
+    }
+});
+
+/* ── FILTER / SEARCH ── */
+function filterTable() {
+    var status = document.getElementById('statusFilter').value;
+    var time   = document.getElementById('timeFilter').value;
+    var q      = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+    var today  = new Date(); today.setHours(0,0,0,0);
+    var rows   = document.querySelectorAll('#outageBody tr[data-date]');
+    var count  = 0;
+
+    rows.forEach(function(row) {
+        var d      = new Date(row.dataset.date + 'T00:00:00');
+        var isAct  = row.dataset.active === 'true';
+        var reason = row.dataset.reason || '';
+        var towns  = row.dataset.towns  || '';
+        var areas  = row.querySelector('.areas-pill-wrap')?.textContent.toLowerCase() || '';
+
+        var statusOk = status === 'all'
+            || (status === 'active'   &&  isAct)
+            || (status === 'inactive' && !isAct);
+        var timeOk = time === 'all'
+            || (time === 'upcoming' && d > today)
+            || (time === 'past'     && d < today)
+            || (time === 'today'    && d.getTime() === today.getTime());
+        var searchOk = !q || reason.includes(q) || towns.includes(q) || areas.includes(q);
+
+        var show = statusOk && timeOk && searchOk;
+        row.style.display = show ? '' : 'none';
+        if (show) count++;
+    });
+
+    document.getElementById('tableCount').textContent = count + ' record' + (count !== 1 ? 's' : '');
+}
+
+function clearFilters() {
+    document.getElementById('statusFilter').value = 'all';
+    document.getElementById('timeFilter').value   = 'all';
+    document.getElementById('searchInput').value  = '';
+    filterTable();
+}
+
+/* ── CONFIRM DELETE ── */
+function confirmDelete(id, dateStr, reason) {
+    document.getElementById('confirmText').textContent =
+        'Delete the outage scheduled for ' + dateStr + ' ("' + reason + '")? This cannot be undone.';
+    document.getElementById('confirmOverlay').classList.add('show');
+    document.getElementById('confirmDeleteBtn').onclick = function() {
+        var f = document.getElementById('deleteForm');
+        f.action = '/admin/outages/delete/' + id;
+        f.method = 'POST';
+        f.submit();
+    };
+}
+
+function closeConfirm() {
+    document.getElementById('confirmOverlay').classList.remove('show');
+}
+
+document.getElementById('confirmOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeConfirm();
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeConfirm();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,2483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ILECO-1 — Report a Power Emergency</title>
+    <meta name="description" content="Report power outages and electrical hazards to ILECO-1 for rapid response.">
+    <meta name="robots" content="noindex, nofollow">
+
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://unpkg.com">
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+
+    <link rel="preload" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" as="style" crossorigin="">
+    <link rel="preload" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" as="script" crossorigin="">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" as="style">
+
+    <!-- Non-blocking CSS: page paints immediately, styles apply once fetched.
+         This is the fix for the slow open inside Facebook Messenger's WebView —
+         previously these two <link rel="stylesheet"> tags were render-blocking,
+         and Messenger's in-app browser is much slower to open new cross-origin
+         connections than a normal mobile browser. -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" media="print" onload="this.media='all'">
+    <noscript>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+    </noscript>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+
+    <style>
+        :root {
+            --blue-900: #0f2564;
+            --blue-700: #1a3faa;
+            --blue-500: #2563eb;
+            --blue-100: #dbeafe;
+            --blue-50:  #eff6ff;
+            --red-700:  #b91c1c;
+            --red-500:  #dc2626;
+            --red-100:  #fee2e2;
+            --green-600:#059669;
+            --green-100:#d1fae5;
+            --amber-500:#f59e0b;
+            --amber-100:#fffbeb;
+            --gray-900: #111827;
+            --gray-700: #374151;
+            --gray-500: #6b7280;
+            --gray-300: #d1d5db;
+            --gray-100: #f3f4f6;
+            --gray-50:  #f9fafb;
+            --white:    #ffffff;
+            --radius-sm:  10px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --radius-xl: 28px;
+            --shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 1px rgba(15,23,42,.03);
+            --shadow-md: 0 6px 24px rgba(15,23,42,.06);
+            --shadow-lg: 0 24px 60px rgba(15,23,42,.10);
+            --hairline: rgba(15,23,42,.08);
+            --font: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --transition: 0.22s cubic-bezier(.4,0,.2,1);
+        }
+
+        *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: var(--font);
+            background: #f5f5f7;
+            color: var(--gray-900);
+            min-height: 100vh;
+            padding: 24px 16px;
+            line-height: 1.6;
+        }
+
+        .sr-only {
+            position:absolute; width:1px; height:1px; padding:0;
+            margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0;
+        }
+        *:focus-visible { outline:3px solid var(--blue-500); outline-offset:2px; border-radius:4px; }
+        .skip-link {
+            position:absolute; top:-50px; left:0;
+            background:var(--blue-500); color:#fff;
+            padding:10px 18px; z-index:10001;
+            text-decoration:none; border-radius:0 0 var(--radius-sm) 0;
+            font-weight:600; font-size:14px;
+            transition: top var(--transition);
+        }
+        .skip-link:focus { top:0; }
+
+        .offline-banner {
+            position:fixed; top:0; left:0; right:0;
+            background:var(--amber-500); color:#78350f;
+            padding:12px 16px; text-align:center;
+            font-weight:600; font-size:14px;
+            z-index:9999; display:none;
+            box-shadow:0 2px 8px rgba(0,0,0,.15);
+        }
+        .offline-banner.show { display:block; }
+
+        .emergency-bar {
+            background: linear-gradient(90deg, #7f1d1d 0%, var(--red-700) 100%);
+            color: #fff; padding: 11px 20px; text-align: center;
+            font-weight: 600; font-size: 13px;
+            display: flex; align-items: center; justify-content: center;
+            gap: 10px; flex-wrap: wrap;
+            border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        }
+        .emergency-bar a { color:#fca5a5; font-weight:700; text-decoration:none; }
+        .emergency-bar a:hover { text-decoration:underline; color:#fff; }
+        .emergency-bar .badge { background:rgba(255,255,255,.15); border-radius:4px; padding:1px 6px; font-size:11px; }
+        .pulse-icon { animation: blink 1.2s ease-in-out infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+        .container {
+            max-width: 960px; margin: 24px auto;
+            background: var(--white); border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-lg); overflow: hidden;
+            border: 1px solid rgba(15,23,42,.04);
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--blue-900) 0%, var(--blue-700) 60%, var(--blue-500) 100%);
+            color: #fff; padding: 44px 40px 36px; text-align: center;
+            position: relative; overflow: hidden;
+        }
+        .header::after {
+            content:''; position:absolute; inset:0;
+            background: radial-gradient(ellipse at 70% 30%, rgba(255,255,255,.08) 0%, transparent 65%);
+            pointer-events:none;
+        }
+        .header h1 { font-size: clamp(20px, 4vw, 28px); font-weight: 700; letter-spacing: -.3px; position:relative; z-index:1; }
+        .header p { font-size: 14px; opacity: .85; margin-top: 6px; position:relative; z-index:1; }
+        .header-badge {
+            display:inline-flex; align-items:center; gap:6px;
+            background:rgba(16,185,129,.2); color:#6ee7b7;
+            border:1px solid rgba(16,185,129,.35); border-radius:20px;
+            padding:5px 14px; font-size:12px; font-weight:600;
+            margin-top:12px; position:relative; z-index:1;
+        }
+
+        .form-body { padding: 40px 40px 32px; }
+        @media(max-width:600px){ .form-body{ padding:28px 20px; } }
+
+        .progress-wrap { display:flex; gap:8px; align-items:center; margin-bottom:28px; }
+        .progress-step { flex:1; height:3px; border-radius:3px; background:var(--hairline); transition: background var(--transition); }
+        .progress-step.active { background: var(--blue-500); }
+        .progress-step.done   { background: var(--green-600); }
+        .progress-label { font-size:12px; font-weight:600; color:var(--gray-500); white-space:nowrap; }
+
+        .hotline-card {
+            display:flex; align-items:flex-start; gap:14px;
+            background:#fff7f7;
+            border:1px solid rgba(220,38,38,.12);
+            border-left:3px solid var(--red-500);
+            border-radius:var(--radius-md); padding:18px 20px; margin-bottom:20px;
+            box-shadow: var(--shadow-sm);
+        }
+        .hotline-card .hl-icon { font-size:26px; flex-shrink:0; }
+        .hotline-card .hl-title { font-weight:700; color:var(--red-700); font-size:15px; }
+        .hotline-card .hl-title a { color:var(--red-700); }
+        .hotline-card .hl-sub { font-size:13px; color:#b91c1c; margin-top:2px; }
+        .priority-toggle-btn {
+            background:none; border:none; color:var(--blue-500); font-size:13px;
+            font-weight:600; cursor:pointer; text-decoration:underline;
+            font-family:inherit; padding:0; margin-left:auto; white-space:nowrap; flex-shrink:0;
+        }
+
+        .priority-info {
+            display:none; background:var(--blue-50); border-left:4px solid var(--blue-500);
+            border-radius:var(--radius-md); padding:16px 18px; margin-bottom:20px;
+            font-size:13px; line-height:1.75;
+        }
+        .priority-info.open { display:block; }
+        .priority-info ul { margin:8px 0 0 18px; }
+        .priority-info li { margin:4px 0; }
+
+        .privacy-card {
+            background: #f5f9ff; border: 1px solid rgba(37,99,235,.12);
+            border-radius: var(--radius-md); padding: 18px 20px;
+            margin-bottom: 24px; font-size: 13px; line-height: 1.7; color: #075985;
+            box-shadow: var(--shadow-sm);
+            transition: border-color 0.2s ease, background-color 0.2s ease;
+        }
+        .privacy-card h4 { font-size:14px; font-weight:700; color:#0369a1; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+        .privacy-card ul { margin:6px 0 0 18px; }
+        .privacy-card li { margin:3px 0; }
+
+        .privacy-card.consent-error {
+            border-color: var(--red-500);
+            background: #fff5f5;
+            animation: shakeCard 0.45s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shakeCard {
+            10%, 90%  { transform: translateX(-3px); }
+            20%, 80%  { transform: translateX(4px); }
+            30%, 50%, 70% { transform: translateX(-5px); }
+            40%, 60%  { transform: translateX(5px); }
+        }
+
+        .consent-row {
+            display: flex; align-items: flex-start; gap: 12px;
+            margin-top: 14px; padding-top: 12px;
+            border-top: 1px solid #bae6fd;
+            transition: border-top-color 0.2s ease;
+        }
+        .privacy-card.consent-error .consent-row { border-top-color: #fca5a5; }
+
+        .consent-checkbox-wrap {
+            position: relative; flex-shrink: 0;
+            width: 44px; height: 44px;
+            display: flex; align-items: center; justify-content: center; margin-top: -8px;
+        }
+        .consent-checkbox-wrap input[type="checkbox"] {
+            width: 22px; height: 22px; cursor: pointer;
+            accent-color: var(--blue-500);
+            -webkit-appearance: checkbox; appearance: checkbox;
+            flex-shrink: 0; transform: scale(1); touch-action: manipulation;
+        }
+        .consent-checkbox-wrap input[type="checkbox"]:focus-visible {
+            outline: 3px solid var(--blue-500); outline-offset: 3px; border-radius: 3px;
+        }
+        .consent-checkbox-wrap.checkbox-error input[type="checkbox"] {
+            outline: 3px solid var(--red-500); outline-offset: 2px; border-radius: 3px;
+        }
+        .consent-row label {
+            font-size: 13px; color: #0c4a6e; cursor: pointer;
+            font-weight: 500; line-height: 1.55; flex: 1; padding: 4px 0;
+        }
+        .consent-row label span { color: var(--red-500); }
+        .consent-error-msg {
+            display: none; align-items: center; gap: 8px; margin-top: 10px;
+            padding: 10px 14px; background: #fef2f2;
+            border: 1px solid #fca5a5; border-radius: var(--radius-sm);
+            font-size: 13px; font-weight: 600; color: var(--red-700);
+            animation: fadeInDown 0.25s ease;
+        }
+        .consent-error-msg.show { display: flex; }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        #consentError { display: none !important; }
+
+        .false-report-warn {
+            background:#fffdf5; border:1px solid rgba(245,158,11,.18);
+            border-radius:var(--radius-md); padding:12px 16px;
+            margin-bottom:20px; font-size:13px; color:#78350f; line-height:1.6;
+            box-shadow: var(--shadow-sm);
+        }
+        .false-report-warn strong { color:#92400e; }
+
+        .divider { height:1px; background:linear-gradient(90deg,transparent,var(--gray-300),transparent); margin:28px 0; }
+        .section-label {
+            font-size:12px; font-weight:600; letter-spacing:.06em;
+            text-transform:uppercase; color:var(--gray-500);
+            margin-bottom:18px; display:flex; align-items:center; gap:8px;
+        }
+        .section-label::after { content:''; flex:1; height:1px; background:var(--hairline); }
+
+        .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px; }
+        @media(max-width:640px){ .form-grid{ grid-template-columns:1fr; } }
+        .field { display:flex; flex-direction:column; }
+        .field.full { grid-column:1/-1; }
+
+        label { font-size:13px; font-weight:600; color:var(--gray-700); margin-bottom:6px; display:flex; align-items:center; gap:5px; }
+        label .req { color:var(--red-500); font-size:15px; line-height:1; }
+        label .opt { font-weight:400; color:var(--gray-500); font-size:11px; margin-left:2px; }
+
+        input, textarea, select {
+            width:100%; padding:13px 14px;
+            border:1px solid var(--hairline); border-radius:var(--radius-sm);
+            font-size:14px; font-family:var(--font); color:var(--gray-900);
+            background:#fbfbfd; transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+            -webkit-appearance:none; appearance:none;
+        }
+        @supports (-webkit-touch-callout: none) { input, textarea, select { font-size: 16px !important; } }
+        input:focus, textarea:focus, select:focus { outline:none; border-color:var(--blue-500); background:var(--white); box-shadow:0 0 0 4px rgba(37,99,235,.10); }
+        input.invalid, textarea.invalid, select.invalid { border-color:var(--red-500); background:#fff8f8; }
+        input.valid, textarea.valid, select.valid { border-color:var(--green-600); background:#f7fdfa; }
+        textarea { resize:vertical; min-height:110px; }
+        select { cursor:pointer; }
+
+        input.address-suggested { animation: addressFlash 1s ease-in-out; }
+        @keyframes addressFlash { 0%{background-color:#fffbeb;border-color:#fbbf24} 100%{background-color:transparent;border-color:var(--gray-300)} }
+
+        .field-hint { font-size:11px; color:var(--gray-500); margin-top:4px; line-height:1.4; }
+        .field-error { font-size:12px; color:var(--red-500); font-weight:500; margin-top:4px; min-height:18px; display:block; }
+        .char-counter { font-size:11px; text-align:right; margin-top:4px; font-weight:500; transition:color var(--transition); }
+        .char-counter.ok     { color:var(--green-600); }
+        .char-counter.warn   { color:var(--amber-500); }
+        .char-counter.danger { color:var(--red-500); }
+
+        .draft-badge {
+            display:none; align-items:center; gap:5px;
+            font-size:11px; font-weight:600; color:var(--green-600);
+            background:var(--green-100); padding:3px 10px;
+            border-radius:20px; margin-left:auto;
+        }
+        .draft-badge.show { display:inline-flex; }
+
+        .account-confirm { display:none; margin-top:6px; }
+        .account-confirm.show { display:block; }
+
+        .incident-guidance {
+            display:none; margin-top:10px; padding:13px 15px;
+            border-radius:var(--radius-sm); font-size:13px; line-height:1.65;
+        }
+        .incident-guidance.outage   { background:#eff6ff; border-left:4px solid var(--blue-500); color:#1e40af; }
+        .incident-guidance.sdi      { background:#faf5ff; border-left:4px solid #8b5cf6; color:#4c1d95; }
+        .incident-guidance.critical { background:#fff1f2; border-left:4px solid #f43f5e; color:#881337; }
+        .incident-guidance h5 { font-size:13px; font-weight:700; margin-bottom:5px; }
+        .incident-guidance ul { margin:5px 0 0 16px; }
+        .incident-guidance li { margin:3px 0; }
+
+        .time-warning {
+            display:none; margin-top:6px; padding:8px 12px;
+            background:var(--amber-100); border:1px solid var(--amber-500);
+            border-radius:var(--radius-sm); font-size:12px; color:#92400e; font-weight:500;
+        }
+
+        /* ── ACTIVE OUTAGE ALERT (new) ─────────────────── */
+        .active-outage-alert {
+            display:none; margin-top:10px; padding:14px 16px;
+            background:linear-gradient(135deg,#fff1f2,#ffe4e6);
+            border:2px solid var(--red-500); border-radius:var(--radius-md);
+            font-size:13px; color:#991b1b; line-height:1.65;
+            animation: fadeUp .3s ease;
+        }
+        .active-outage-alert.show { display:block; }
+        .active-outage-alert strong { color:var(--red-700); }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+
+        .location-wrap { border:1px solid var(--gray-300); border-radius:var(--radius-md); padding:18px; background:var(--gray-50); }
+        #map { height:360px; border-radius:var(--radius-md); margin:14px 0 12px; border:1px solid var(--hairline); position:relative; }
+        @media(max-width:480px){ #map{ height:240px; } }
+        .map-container { position:relative; }
+        .map-controls { position:absolute; top:10px; left:10px; z-index:1000; display:flex; flex-direction:column; gap:6px; }
+        .map-ctrl-btn {
+            background:var(--white); border:1px solid var(--hairline);
+            border-radius:var(--radius-sm); width:42px; height:42px;
+            display:flex; align-items:center; justify-content:center;
+            cursor:pointer; font-size:18px; box-shadow:var(--shadow-sm);
+            transition: all var(--transition);
+        }
+        .map-ctrl-btn:hover { background:var(--gray-100); transform:scale(1.05); }
+
+        .coord-info {
+            padding:9px 12px; border-radius:var(--radius-sm);
+            font-size:13px; font-weight:500;
+            background:var(--gray-100); color:var(--gray-500);
+            transition: all var(--transition);
+        }
+        .coord-info.selected { background:var(--blue-100); color:#1e40af; }
+        .coord-info.approx   { background:var(--amber-100); color:#78350f; }
+
+        .centroid-warn {
+            display:none; margin-top:10px; padding:12px 14px;
+            border-radius:var(--radius-sm); background:var(--amber-100);
+            border:1px solid var(--amber-500); font-size:13px; color:#78350f;
+            align-items:flex-start; gap:10px;
+        }
+        .centroid-warn.show { display:flex; }
+        .centroid-warn .cw-icon { font-size:20px; flex-shrink:0; margin-top:1px; }
+        .centroid-warn .cw-text small { display:block; margin-top:3px; font-size:11px; color:#92400e; }
+
+        #feederInfo { display:none; margin-top:12px; }
+        .feeder-card { border-radius:var(--radius-md); padding:14px 16px; display:flex; align-items:flex-start; gap:12px; animation: fadeUp .35s ease; box-shadow: var(--shadow-sm); }
+        .feeder-card.inside   { background:#f8f6ff; border:1px solid #ddd4fb; }
+        .feeder-card.nearest  { background:#f0fdff; border:1px solid #b8ecf5; }
+        .feeder-card.outside  { background:var(--gray-50); border:1px solid var(--hairline); }
+        .feeder-card.checking { background:var(--gray-50); border:1px dashed var(--hairline); }
+        .feeder-icon { font-size:26px; flex-shrink:0; }
+        .feeder-body { flex:1; min-width:0; }
+        .feeder-lbl  { font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; margin-bottom:3px; }
+        .inside  .feeder-lbl { color:#7c3aed; }
+        .nearest .feeder-lbl { color:#0891b2; }
+        .outside .feeder-lbl, .checking .feeder-lbl { color:var(--gray-500); }
+        .feeder-name { font-size:19px; font-weight:800; line-height:1.2; margin-bottom:5px; }
+        .inside  .feeder-name { color:#4c1d95; }
+        .nearest .feeder-name { color:#0e7490; }
+        .outside .feeder-name, .checking .feeder-name { color:var(--gray-700); }
+        .feeder-note { font-size:12px; line-height:1.55; }
+        .inside  .feeder-note { color:#5b21b6; }
+        .nearest .feeder-note { color:#0e7490; }
+        .feeder-meta { margin-top:7px; display:flex; flex-wrap:wrap; gap:5px; }
+        .feeder-pill { display:inline-flex; align-items:center; gap:3px; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600; }
+        .inside  .feeder-pill { background:rgba(124,58,237,.12); color:#6d28d9; }
+        .nearest .feeder-pill { background:rgba(8,145,178,.12); color:#0891b2; }
+        .feeder-pulse { width:9px; height:9px; background:var(--blue-500); border-radius:50%; flex-shrink:0; margin-top:8px; animation:dotPulse 1s ease-in-out infinite; }
+        @keyframes dotPulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.5);opacity:.5} }
+
+        .btn-gps {
+            width:100%; padding:13px; background:var(--green-600); color:#fff;
+            border:none; border-radius:var(--radius-sm);
+            font-size:14px; font-weight:600; font-family:var(--font);
+            cursor:pointer; margin-top:12px;
+            box-shadow: var(--shadow-sm);
+            transition: all var(--transition);
+            display:flex; align-items:center; justify-content:center; gap:8px;
+        }
+        .btn-gps:hover { background:#047857; transform:translateY(-1px); }
+        .btn-gps:disabled { background:var(--gray-400,#9ca3af); cursor:not-allowed; transform:none; }
+
+        .priority-bar {
+            border-radius:var(--radius-md); padding:14px 18px; margin:20px 0;
+            display:none; align-items:center; gap:12px; font-weight:600; font-size:15px;
+            box-shadow: var(--shadow-sm);
+        }
+        .priority-bar.show { display:flex; }
+        .priority-bar.critical { background:#fef1f1; color:#991b1b; border:1px solid #f7bcbc; animation:pulseCritical 1.6s infinite; }
+        .priority-bar.high     { background:#fef3e8; color:#9a3412; border:1px solid #f6c99a; }
+        .priority-bar.medium   { background:#f8f3ff; color:#4c1d95; border:1px solid #d9c2fb; }
+        @keyframes pulseCritical { 0%,100%{box-shadow:0 4px 12px rgba(220,38,38,.25)} 50%{box-shadow:0 8px 24px rgba(220,38,38,.45)} }
+        .priority-icon { font-size:26px; }
+
+        .dup-banner {
+            display:none; padding:16px 20px; margin-bottom:20px;
+            background:#fffdf5; border:1px solid rgba(245,158,11,.18);
+            border-radius:var(--radius-md); font-size:14px; color:#78350f;
+            box-shadow: var(--shadow-sm);
+        }
+        .dup-banner a { color:#991b1b; font-weight:700; }
+        .dup-banner button { margin-top:10px; background:none; border:1px solid #92400e; border-radius:var(--radius-sm); padding:5px 14px; color:#92400e; cursor:pointer; font-size:12px; font-family:var(--font); }
+
+        .messenger-warn { display:none; background:#fffdf5; border:1px solid rgba(245,158,11,.18); border-radius:var(--radius-md); padding:13px 16px; margin-bottom:18px; font-size:13px; line-height:1.65; color:#78350f; box-shadow: var(--shadow-sm); }
+        .messenger-warn.show { display:block; }
+
+        .map-fallback { display:none; margin-top:10px; padding:10px 14px; background:var(--amber-100); border:1px solid var(--amber-500); border-radius:var(--radius-sm); font-size:13px; color:#78350f; }
+        .map-fallback.show { display:block; }
+
+        .layer-ctrl { position:absolute; top:10px; right:10px; z-index:1000; background:var(--white); border:1px solid var(--hairline); border-radius:var(--radius-sm); box-shadow:var(--shadow-sm); }
+        .layer-btn { background:var(--white); border:none; padding:8px 12px; border-radius:var(--radius-sm); cursor:pointer; display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--gray-700); font-family:var(--font); }
+        .layer-dropdown { position:absolute; top:44px; right:0; background:var(--white); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; min-width:150px; display:none; }
+        .layer-dropdown.open { display:block; }
+        .layer-opt { display:flex; align-items:center; gap:8px; padding:9px 11px; border-radius:6px; cursor:pointer; font-size:13px; color:var(--gray-700); transition:background var(--transition); }
+        .layer-opt:hover { background:var(--gray-100); }
+        .layer-opt.active { background:var(--blue-100); color:var(--blue-700); font-weight:600; }
+        .layer-check { margin-left:auto; display:none; }
+        .layer-opt.active .layer-check { display:block; }
+
+        .btn-submit {
+            width:100%; padding:16px;
+            background:var(--blue-500);
+            color:#fff; border:none; border-radius:var(--radius-md);
+            font-size:16px; font-weight:700; font-family:var(--font);
+            cursor:pointer; margin-top:4px;
+            box-shadow:var(--shadow-sm);
+            transition: all var(--transition);
+            display:flex; align-items:center; justify-content:center; gap:8px;
+        }
+        .btn-submit:hover { background:var(--blue-700); transform:translateY(-1px); box-shadow:var(--shadow-md); }
+        .btn-submit:disabled { background:#9ca3af; cursor:not-allowed; transform:none; box-shadow:none; }
+
+        .success-wrap { display:none; padding:32px; background:linear-gradient(135deg,#d1fae5,#a7f3d0); border-radius:var(--radius-md); text-align:center; }
+        .success-wrap h3 { color:#065f46; font-size:22px; margin-bottom:18px; }
+        .ref-box { background:var(--blue-900); color:#fff; border-radius:var(--radius-md); padding:14px 18px; margin-bottom:16px; text-align:center; }
+        .ref-lbl { font-size:11px; opacity:.75; margin-bottom:4px; }
+        .ref-id  { font-size:24px; font-weight:700; letter-spacing:2px; }
+        .copy-btn { background:none; border:1px solid rgba(255,255,255,.35); color:#fff; border-radius:var(--radius-sm); padding:5px 14px; cursor:pointer; font-size:12px; font-family:var(--font); margin-top:8px; transition:background var(--transition); }
+        .copy-btn:hover { background:rgba(255,255,255,.15); }
+        .success-detail { background:var(--white); padding:20px; border-radius:var(--radius-md); margin:14px 0; text-align:left; font-size:14px; line-height:1.8; }
+        .approx-note { background:var(--amber-100); border:1px solid var(--amber-500); border-radius:var(--radius-sm); padding:8px 12px; font-size:12px; color:#78350f; margin-top:8px; }
+
+        .error-msg { background:var(--red-100); color:#991b1b; padding:13px 16px; border-radius:var(--radius-sm); border-left:4px solid var(--red-500); display:none; font-size:14px; font-weight:500; margin-bottom:18px; }
+
+       .toast { position:fixed; top:-100px; right:20px; background:var(--white); padding:10px 14px; border-radius:10px; box-shadow:0 3px 14px rgba(0,0,0,.14); z-index:10000; min-width:220px; max-width:320px; transition:top .3s ease; }
+        .toast.show { top:76px; }
+        .toast-inner { display:flex; align-items:center; gap:8px; font-size:13px; line-height:1.4; }
+        .toast.toast-error  { border-left:4px solid var(--red-500); }
+        .toast.toast-success{ border-left:4px solid var(--green-600); }
+        .toast.toast-info   { border-left:4px solid var(--blue-500); }
+        @media(max-width:480px){ .toast{ right:10px; left:10px; min-width:auto; } }
+
+        .additional-block { background:#fbfbfd; border:1px solid var(--hairline); border-radius:var(--radius-md); padding:24px; }
+        .additional-block h3 { font-size:15px; font-weight:700; color:var(--gray-700); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+
+        .map-container.fullscreen {
+            position: fixed !important; top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100vh !important;
+            z-index: 9999 !important; border-radius: 0 !important;
+            margin: 0 !important; background: #000 !important;
+        }
+        .map-container.fullscreen #map {
+            width: 100% !important; height: 100% !important;
+            border-radius: 0 !important; margin: 0 !important; border: none !important;
+        }
+        body.map-is-fullscreen { overflow: hidden !important; }
+        body.map-is-fullscreen .container { overflow: visible !important; }
+        body.map-is-fullscreen .container * { visibility: hidden !important; pointer-events: none !important; }
+        body.map-is-fullscreen #mapContainer,
+        body.map-is-fullscreen #mapContainer * { visibility: visible !important; pointer-events: auto !important; }
+        body.map-is-fullscreen #coordInfo { visibility: visible !important; pointer-events: auto !important; }
+
+        .fs-hint { position:absolute; bottom:80px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.72); color:#fff; padding:9px 18px; border-radius:24px; font-size:13px; font-weight:600; z-index:10000; white-space:nowrap; pointer-events:none; display:none; }
+        .fs-hint.show { display:block; animation:fadeUp .3s ease; }
+
+        .hp-field { position:absolute; left:-9999px; opacity:0; height:0; width:0; pointer-events:none; }
+
+        #mapLoadError {
+            display: none; padding: 16px; background: var(--amber-100);
+            border: 1px solid var(--amber-500); border-radius: var(--radius-md);
+            font-size: 13px; color: #78350f; margin-top: 10px;
+        }
+        #mapLoadError.show { display: block; }
+
+        /* ── OUTAGE STATUS BANNER (shown after feeder check) ── */
+        .outage-status-strip {
+            margin-top: 10px; padding: 11px 14px;
+            border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+            display: none; align-items: center; gap: 8px;
+        }
+        .outage-status-strip.outage-active {
+            display: flex;
+            background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b;
+        }
+        .outage-status-strip.outage-ok {
+            display: flex;
+            background: var(--green-100); border: 1px solid #6ee7b7; color: #065f46;
+        }
+    </style>
+</head>
+<body>
+<a href="#outageForm" class="skip-link">Skip to form</a>
+<div id="sr-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+<div id="offlineBanner" class="offline-banner" role="alert">
+    <span>⚠️ Offline — your report will send automatically once reconnected.</span>
+    <a href="tel:+639989893028" style="color:#78350f;font-weight:800;text-decoration:underline;margin-left:8px;">Call 09989893028</a>
+    <a id="offlineBannerMsgrLink" href="#" target="_blank" rel="noopener"
+       style="display:inline-flex;align-items:center;gap:5px;margin-left:10px;padding:4px 10px;background:#1877F2;color:#fff;border-radius:14px;font-size:12px;font-weight:700;text-decoration:none;">
+        💬 Chat with Agent
+    </a>
+</div>
+
+<div class="container">
+    <div class="emergency-bar" role="alert" aria-live="polite">
+        <span class="pulse-icon" aria-hidden="true">🚨</span>
+        <span>EMERGENCY HOTLINE: <a href="tel:+639989893028">09989893028</a> <span class="badge">Globe</span> &nbsp;|&nbsp; Available 24/7</span>
+    </div>
+
+    <div class="header">
+        <h1>⚡ Report a Power Emergency</h1>
+        <p>Submit outages and electrical hazards for rapid ILECO-1 response</p>
+        <div class="header-badge">📍 Precise Location Detection Enabled</div>
+    </div>
+
+    <div class="form-body">
+        <div class="progress-wrap" aria-label="Form completion progress">
+            <div class="progress-step active" id="prog1"></div>
+            <div class="progress-step"        id="prog2"></div>
+            <div class="progress-step"        id="prog3"></div>
+            <span class="progress-label" id="progLabel" aria-live="polite">Step 1 of 3</span>
+        </div>
+
+        <div class="hotline-card" role="complementary">
+            <span class="hl-icon" aria-hidden="true">🚨</span>
+            <div style="flex:1">
+                <div class="hl-title">Life-threatening? Call <a href="tel:+639989893028">09989893028</a> NOW.</div>
+                <div class="hl-sub">Fire, fallen wire, electric shock — call first, then fill this form.</div>
+            </div>
+            <button class="priority-toggle-btn" type="button" onclick="togglePriorityInfo()" aria-expanded="false" id="priToggleBtn">Priority levels ▾</button>
+        </div>
+
+        <div id="priorityInfo" class="priority-info" role="note">
+            <strong>🎯 How reports are prioritized:</strong>
+            <ul>
+                <li><strong>🚨 Critical:</strong> Fire, explosion, fallen wires, electric shock — immediate emergency dispatch</li>
+                <li><strong>⚡ High:</strong> Power outages, blackouts, voltage problems — urgent response within 2 hours</li>
+                <li><strong>🔦 Medium:</strong> Service drop / street light — scheduled response within 24–48 hours</li>
+            </ul>
+        </div>
+
+        <div class="false-report-warn" role="note">
+            ⚖️ <strong>Warning:</strong> Filing a false or malicious report may constitute a violation of Philippine law. Please only submit reports for genuine power emergencies.
+        </div>
+
+        <div class="privacy-card" id="privacyCard" role="note">
+            <h4>🔒 Privacy Notice — Data Privacy Act of 2012 (RA 10173)</h4>
+            ILECO-1 collects your name, contact number, and location <strong>solely to respond to your power emergency report.</strong>
+            <ul>
+                <li>Your data is stored securely and used only for dispatch and follow-up.</li>
+                <li>Reports are retained for <strong>3 years</strong> per our data retention policy.</li>
+                <li>Your information will not be shared with third parties except as required by law.</li>
+                <li>You may request access or deletion of your data by contacting ILECO-1.</li>
+            </ul>
+            <div class="consent-row">
+                <div class="consent-checkbox-wrap" id="consentCheckWrap">
+                    <input type="checkbox" id="consentCheck" required aria-required="true" aria-describedby="consentErrorMsg">
+                </div>
+                <label for="consentCheck">
+                    I have read the privacy notice and consent to the collection and use of my personal information for this emergency report. <span>*</span>
+                </label>
+            </div>
+            <div class="consent-error-msg" id="consentErrorMsg" role="alert" aria-live="assertive">
+                <span>⚠️</span>
+                <span>You must agree to the privacy notice before submitting.</span>
+            </div>
+            <span class="field-error" id="consentError" role="alert"></span>
+        </div>
+
+        <div id="messengerWarn" class="messenger-warn" role="alert"></div>
+        <div id="dupBanner" class="dup-banner" role="alert">
+            <strong>⚠️ You already submitted a report this session.</strong><br>
+            Your reference number was: <strong id="dupRefDisplay"></strong>.<br>
+            If you still have an emergency, call <a href="tel:+639989893028">09989893028</a> directly.
+            <br><button type="button" onclick="dismissDupBanner()">Submit another report anyway</button>
+        </div>
+
+        <div id="errorMsg" class="error-msg" role="alert" aria-live="assertive"></div>
+        <div id="priorityBar" class="priority-bar" role="status" aria-live="polite"></div>
+
+        <form id="outageForm" novalidate aria-label="Power outage report form" autocomplete="off">
+            <input class="hp-field" type="text" name="_hp_field" id="_hp_field" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+            <div class="section-label">
+                <span>① Contact Information</span>
+                <span class="draft-badge" id="draftBadge">💾 Draft saved</span>
+            </div>
+
+            <div class="form-grid">
+                <div class="field">
+                    <label for="fullName">👤 Full Name <span class="req">*</span></label>
+                    <input type="text" id="fullName" name="fullName" required maxlength="100" placeholder="Juan Dela Cruz" autocomplete="name" aria-required="true" aria-describedby="err-fullName">
+                    <span class="field-error" id="err-fullName" role="alert"></span>
+                </div>
+                <div class="field">
+                    <label for="contactNumber">📱 Contact Number <span class="req">*</span></label>
+                    <input type="tel" id="contactNumber" name="contactNumber" required maxlength="20" placeholder="09171234567" autocomplete="tel" inputmode="tel" aria-required="true" aria-describedby="err-contactNumber">
+                    <span class="field-error" id="err-contactNumber" role="alert"></span>
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div class="field">
+                    <label for="email">📧 Email <span class="opt">(Optional)</span></label>
+                    <input type="email" id="email" name="email" maxlength="150" placeholder="juan@example.com" autocomplete="email" aria-describedby="err-email">
+                    <span class="field-error" id="err-email" role="alert"></span>
+                </div>
+                <div class="field">
+                    <label for="accountNumber">🏠 Account Number <span class="opt">(Optional — on your bill)</span></label>
+                    <input type="text" id="accountNumber" name="accountNumber" maxlength="30" placeholder="Enter if available">
+                    <div class="account-confirm" id="accountConfirm"></div>
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div class="field">
+                    <label for="town">🏙️ Town / Municipality <span class="req">*</span></label>
+                    <select id="town" name="town" required aria-required="true" aria-describedby="err-town">
+                        <option value="">Select Town</option>
+                        <option value="Alimodian">Alimodian</option>
+                        <option value="Cabatuan">Cabatuan</option>
+                        <option value="Guimbal">Guimbal</option>
+                        <option value="Igbaras">Igbaras</option>
+                        <option value="Leganes">Leganes</option>
+                        <option value="Leon">Leon</option>
+                        <option value="Maasin">Maasin</option>
+                        <option value="Miag-ao">Miag-ao</option>
+                        <option value="Oton">Oton</option>
+                        <option value="Pavia">Pavia</option>
+                        <option value="San Joaquin">San Joaquin</option>
+                        <option value="San Miguel">San Miguel</option>
+                        <option value="Sta. Barbara">Sta. Barbara</option>
+                        <option value="Tigbauan">Tigbauan</option>
+                        <option value="Tubungan">Tubungan</option>
+                    </select>
+                    <span class="field-error" id="err-town" role="alert"></span>
+                </div>
+                <div class="field">
+                    <label for="barangay">📍 Barangay <span class="req">*</span></label>
+                    <select id="barangay" name="barangay" required aria-required="true" aria-describedby="err-barangay">
+                        <option value="">Select Barangay</option>
+                    </select>
+                    <span class="field-error" id="err-barangay" role="alert"></span>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="section-label">② Your Location</div>
+
+            <div class="field location-wrap">
+                <label for="address">📍 Complete Address <span class="opt">(Auto-filled from map or barangay selection)</span> <span class="req">*</span></label>
+                <input type="text" id="address" name="address" required maxlength="300"
+                       placeholder="Brgy. Bacan, Cabatuan, Iloilo"
+                       autocomplete="street-address" aria-required="true" aria-describedby="err-address">
+                <span class="field-error" id="err-address" role="alert"></span>
+
+                <div id="mapFallback" class="map-fallback">
+                    💡 If the map is unavailable, type your full address above (include Barangay and Town).
+                </div>
+                <div id="mapLoadError" class="map-fallback" role="alert">
+                    🗺️ Map could not be loaded. Please type your full address above instead.
+                </div>
+
+                <div class="map-container" id="mapContainer" style="position:relative;margin-top:14px;">
+                    <div id="map" role="application" aria-label="Location picker map. Click to set your location."></div>
+                    <div class="map-controls">
+                        <button type="button" class="map-ctrl-btn" onclick="toggleMapFullscreen()" title="Toggle fullscreen" aria-label="Toggle map fullscreen">
+                            <span id="fsIcon">⛶</span>
+                        </button>
+                    </div>
+                    <div id="fsHint" class="fs-hint">📍 Tap your location — map closes automatically</div>
+                </div>
+
+                <div id="coordInfo" class="coord-info" style="margin-top:10px;" role="status" aria-live="polite">
+                    📍 Click the map or use GPS to mark your exact location
+                </div>
+
+                <div id="centroidWarn" class="centroid-warn" role="alert">
+                    <span class="cw-icon">⚠️</span>
+                    <div class="cw-text">
+                        <strong>Approximate location — barangay centre pinned.</strong>
+                        For faster crew dispatch, tap the map or use GPS below.
+                        <small>Your report will still go through — exact location just helps crew find you faster.</small>
+                    </div>
+                </div>
+
+                <div id="feederInfo" aria-live="polite" aria-label="Feeder coverage information"></div>
+
+                <!-- Active outage strip shown below feeder info -->
+                <div id="outageStatusStrip" class="outage-status-strip" role="status" aria-live="polite"></div>
+
+                <button type="button" class="btn-gps" id="gpsBtn" onclick="getMyLocation()">
+                    📡 Use My Current GPS Location
+                </button>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="section-label">③ Incident Details</div>
+
+            <div class="additional-block">
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="incidentType">📋 Type of Incident</label>
+                        <select id="incidentType" name="incidentType" aria-describedby="incidentGuidance">
+                            <option value="power_outage">Power Outage / No Electricity</option>
+                            <option value="fallen_wire">Fallen Wire / Pole Down</option>
+<option value="vehicular_accident">Vehicular Accident (Hit Pole/Wire)</option>  <!-- ADD -->
+<option value="leaning_pole">Leaning / Damaged Pole (Needs Inspection)</option>
+                            <option value="tree_branch">Tree / Branch on Power Line</option>
+                            <option value="vegetation_clearing">Tree/Vegetation Clearing Request (Near Power Lines)</option>
+                            <option value="transformer_issue">Transformer Problem / Explosion</option>
+                            <option value="fire_hazard">Fire / Burning Smell</option>
+                            <option value="sparking">Sparking / Arcing</option>
+                            <option value="voltage_issue">Voltage Problem (High/Low)</option>
+                            <option value="sdi_problem">No Power — My House Only</option>
+                            <option value="streetlight">Streetlight Not Working</option>
+                            <option value="equipment_damage">Equipment Damage</option>
+                            <option value="other">Other Emergency</option>
+                        </select>
+                        <div id="incidentGuidance" class="incident-guidance" role="note"></div>
+                    </div>
+
+                    <div class="field">
+                        <label for="affectedArea">🏘️ Affected Area</label>
+                        <select id="affectedArea" name="affectedArea">
+                            <option value="single_house">Single House / Building</option>
+                            <option value="multiple_houses">Multiple Houses (2–5)</option>
+                            <option value="street">Entire Street / Purok</option>
+                            <option value="barangay">Entire Barangay</option>
+                            <option value="multiple_barangay">Multiple Barangays</option>
+                            <option value="unknown">Unknown</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="incidentTime">⏰ Time Incident Started</label>
+                        <input type="time" id="incidentTime" name="incidentTime">
+                        <div class="field-hint">Pre-filled to now — change if it started earlier.</div>
+                        <div id="timeWarning" class="time-warning">
+                            ⚠️ The time you entered is in the future. Please double-check.
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label for="duration">⏱️ Duration (if ongoing)</label>
+                        <select id="duration" name="duration">
+                            <option value="just_now">Just Now (less than 15 min)</option>
+                            <option value="15_30min">15–30 minutes</option>
+                            <option value="30_60min">30 min – 1 hour</option>
+                            <option value="1_3hours">1–3 hours</option>
+                            <option value="3_6hours">3–6 hours</option>
+                            <option value="more_6hours">More than 6 hours</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- PHOTO UPLOAD -->
+                <div class="field full" style="margin-top:18px;">
+                    <label for="photoInput">
+    📷 Attach Photo or Video
+    <span class="opt">(Optional — e.g. fallen pole, damaged wire, transformer)</span>
+</label>
+<input type="file" id="photoInput" accept="image/*,video/*" multiple
+    style="padding:10px;border:2px dashed var(--gray-300);
+           border-radius:var(--radius-sm);
+           background:var(--gray-50); cursor:pointer;">
+<div class="field-hint">
+    Up to 3 files (photos or short videos, max 20MB each). Helps our crew confirm the issue before they arrive.
+</div>
+                    <div id="photoPreviews" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;"></div>
+                    <div id="photoStatus" style="font-size:12px;color:var(--gray-500);margin-top:6px;"></div>
+                </div>
+            </div>
+
+            <div class="field full" style="margin-top:18px;">
+                <label for="details">📝 Detailed Description <span class="req">*</span></label>
+                <textarea id="details" name="details" required maxlength="2000"
+                          placeholder="Describe the incident:&#10;• What happened?&#10;• Any hazards (fire, fallen wires)?&#10;• Injuries or property damage?&#10;• Landmarks near the location"
+                          aria-required="true" aria-describedby="err-details detailsCounter"></textarea>
+                <div id="detailsCounter" class="char-counter danger">Please enter a description</div>
+                <span class="field-error" id="err-details" role="alert"></span>
+            </div>
+
+            <div class="field full" style="margin-top:16px;">
+                <label for="landmark">🏢 Nearest Landmark <span class="opt">(Optional but helpful)</span></label>
+                <input type="text" id="landmark" name="landmark" maxlength="200"
+                       placeholder="e.g., Near Cabatuan Public Market, beside Barangay Hall">
+            </div>
+
+            <button id="submitBtn" type="submit" class="btn-submit" style="margin-top:24px;">
+                ⚡ Send Emergency Report
+            </button>
+
+            <p style="text-align:center;font-size:11px;color:var(--gray-500);margin-top:10px;">
+                By submitting you confirm this is a genuine power emergency. False reports may result in legal action.
+            </p>
+        </form>
+
+        <div id="successWrap" class="success-wrap" role="alert" aria-live="assertive">
+            <h3>✅ Report Successfully Submitted!</h3>
+            <div id="successDetail"></div>
+            <button onclick="resetFormSmoothly()" class="btn-submit" style="width:auto;margin:10px auto;padding:12px 28px;font-size:14px;">
+                📝 Submit Another Report
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/ileco-geodata.js"></script>
+<script>
+// ── Robust centroid lookup ──────────────────────────────────────
+// Guards against town/barangay key mismatches (trailing spaces,
+// casing, accents) between the <select> values in this HTML and
+// the keys inside ileco-geodata.js. Without this, a single mismatched
+// key silently killed auto-fill and forced the user to tap the map.
+function _normKey(s) {
+    return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getTownCentroids(town) {
+    if (!town || typeof barangayCentroids === 'undefined') return {};
+    if (barangayCentroids[town]) return barangayCentroids[town];
+    const targetTown = _normKey(town);
+    for (const tKey of Object.keys(barangayCentroids)) {
+        if (_normKey(tKey) === targetTown) return barangayCentroids[tKey];
+    }
+    return {};
+}
+
+function getBarangayCentroid(town, brgy) {
+    const townCentroids = getTownCentroids(town);
+    if (townCentroids[brgy]) return townCentroids[brgy];
+    const targetBrgy = _normKey(brgy);
+    for (const bKey of Object.keys(townCentroids)) {
+        if (_normKey(bKey) === targetBrgy) return townCentroids[bKey];
+    }
+    return null;
+}
+'use strict';
+// barangaysByTown and barangayCentroids are now loaded from
+// /static/js/ileco-geodata.js (see <script> tag added just before
+// this block in the HTML). This cuts ~40KB of inline JS out of every
+// page load and lets the browser cache that file across visits and
+// across report_outage.html / meter_concern.html.
+
+// ═══════════════════════════════════════════════════════════════
+// SECURITY / SANITIZATION
+// ═══════════════════════════════════════════════════════════════
+function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = String(str ?? '');
+    return d.innerHTML;
+}
+
+function generateFallbackRefId() {
+    const d = new Date();
+    const yy   = String(d.getFullYear()).slice(2);
+    const mm   = String(d.getMonth() + 1).padStart(2, '0');
+    const dd   = String(d.getDate()).padStart(2, '0');
+    const rand = String(Math.floor(Math.random() * 9000) + 1000);
+    return `RPT-${yy}${mm}${dd}-${rand}`;
+}
+
+const _pageLoadTime = Date.now();
+
+let _formToken = null;
+let _formTokenIssuedAt = 0;
+let _lastClientSubmit = 0;
+const CLIENT_MIN_INTERVAL = 60_000;
+
+// Server-side token TTL is 1 hour (see app.py _TOKEN_TTL). A real
+// emergency-report filler can easily take longer than that — poor
+// signal, re-checking details, interruptions. Refresh well before
+// the server would reject it, so submission never fails due to a
+// stale token.
+const TOKEN_SAFE_LIFETIME = 45 * 60 * 1000; // 45 min — comfortably under the 60 min server TTL
+
+async function _doFetchToken() {
+    try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 5000);
+        const r = await fetch('/api/form_token', {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+        });
+        clearTimeout(tid);
+        if (!r.ok) return null;
+        const d = await r.json();
+        return (d && d.success && d.token) ? d.token : null;
+    } catch { return null; }
+}
+
+_doFetchToken().then(t => { if (t) { _formToken = t; _formTokenIssuedAt = Date.now(); } });
+
+async function ensureFormToken(forceRefresh = false) {
+    const isStale = !_formToken || (Date.now() - _formTokenIssuedAt) > TOKEN_SAFE_LIFETIME;
+    if (!forceRefresh && _formToken && !isStale) return _formToken;
+    const t = await _doFetchToken();
+    if (t) { _formToken = t; _formTokenIssuedAt = Date.now(); }
+    return _formToken;
+}
+
+// ── Proactive background refresh ──────────────────────────────────
+// Covers the case where the tab stays active/foregrounded the whole
+// time (interval fires normally).
+setInterval(() => { ensureFormToken(true); }, TOKEN_SAFE_LIFETIME);
+
+// ── Refresh-on-return ──────────────────────────────────────────────
+// Mobile browsers routinely suspend timers in backgrounded tabs, so
+// the interval above may simply never fire while the person is
+// filling the form with the app in the background. Catch up the
+// moment they come back.
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        ensureFormToken(true);
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// MESSENGER DEEP-LINK CONFIG
+// ═══════════════════════════════════════════════════════════════
+const FB_PAGE_ID = '112388708468440'; // ← REPLACE with your real ILECO-1 Page ID
+
+function sanitizeRef(ref) {
+    // Facebook only allows letters, numbers, +, -, _, = in ref params
+    return String(ref).replace(/[^a-zA-Z0-9+\-_=]/g, '').slice(0, 250);
+}
+
+function messengerLink(ref) {
+    const cleanRef = sanitizeRef(ref);
+    return `https://m.me/${FB_PAGE_ID}?ref=${cleanRef}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRAFT AUTO-SAVE
+// ═══════════════════════════════════════════════════════════════
+const DRAFT_KEY = 'ileco_report_draft';
+const DRAFT_FIELDS = ['fullName','contactNumber','email','accountNumber',
+                      'town','barangay','address','details','landmark',
+                      'incidentType','affectedArea','incidentTime','duration'];
+
+let _draftSaveTimer = null;
+function saveDraft() {
+    if (_submitted) return; // ── FIX: never resave a draft after a successful submission ──
+    const draft = {};
+    DRAFT_FIELDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) draft[id] = el.value;
+    });
+    try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+        const badge = document.getElementById('draftBadge');
+        badge.classList.add('show');
+        setTimeout(() => badge.classList.remove('show'), 2500);
+    } catch { /* storage full or denied */ }
+}
+
+function saveDraftDebounced() {
+    clearTimeout(_draftSaveTimer);
+    _draftSaveTimer = setTimeout(saveDraft, 1500);
+}
+
+function loadDraft() {
+    try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+
+        // Restore non-dependent fields first
+        DRAFT_FIELDS.filter(id => id !== 'town' && id !== 'barangay').forEach(id => {
+            const el = document.getElementById(id);
+            if (el && draft[id] !== undefined && draft[id] !== '') el.value = draft[id];
+        });
+
+        // Restore town, then populate barangay dropdown, then restore barangay
+        const townEl = document.getElementById('town');
+        if (townEl && draft['town']) {
+            townEl.value = draft['town'];
+            const brgysByTown = barangaysByTown[draft['town']] || [];
+            const sel = document.getElementById('barangay');
+            sel.innerHTML = '<option value="">Select Barangay</option>';
+            brgysByTown.forEach(b => {
+                const o = document.createElement('option');
+                o.value = b; o.textContent = b;
+                sel.appendChild(o);
+            });
+            if (draft['barangay']) {
+                sel.value = draft['barangay'];
+            }
+        }
+        showToast('📋 Draft restored from your last session.', 'info', 4000);
+    } catch { /* corrupted draft */ }
+}
+
+function clearDraft() {
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+}
+// ═══════════════════════════════════════════════════════════════
+// OFFLINE SUBMISSION QUEUE
+// ═══════════════════════════════════════════════════════════════
+const OFFLINE_QUEUE_KEY = 'ileco_offline_queue';
+
+function getOfflineQueue() {
+    try {
+        const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+}
+
+function saveOfflineQueue(queue) {
+    try { localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue)); } catch {}
+}
+
+function queueOfflineReport(payload, elapsedMs) {
+    const queue = getOfflineQueue();
+    const entry = {
+        id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        payload,
+        elapsedMs,
+        queuedAt: Date.now()
+    };
+    queue.push(entry);
+    saveOfflineQueue(queue);
+    return { id: entry.id, queueLength: queue.length };
+}
+
+function removeFromOfflineQueue(id) {
+    saveOfflineQueue(getOfflineQueue().filter(item => item.id !== id));
+}
+
+let _flushingQueue = false;
+
+async function flushOfflineQueue() {
+    if (_flushingQueue || !navigator.onLine) return;
+    const queue = getOfflineQueue();
+    if (queue.length === 0) return;
+
+    _flushingQueue = true;
+    let sentCount = 0;
+    let failCount = 0;
+
+    for (const item of queue) {
+        try {
+            let token = await ensureFormToken();
+            if (!token) continue; // still can't reach server — leave queued, retry on next flush
+
+            let res = await doSubmit(token, item);
+
+            // Queued reports can easily outlive the 1-hour form-token TTL
+            // (offline for >1hr is normal during a real outage). Don't treat
+            // an expired token as a permanent failure — refresh it and
+            // retry once immediately instead of dropping the report.
+            if (res.status === 403) {
+                _formToken = null;
+                token = await ensureFormToken();
+                if (token) res = await doSubmit(token, item);
+            }
+
+            let resData = {};
+            try {
+                const resText = await res.text();
+                resData = resText ? JSON.parse(resText) : {};
+            } catch (_) { /* body not JSON */ }
+
+            if (res.ok && resData.success) {
+                removeFromOfflineQueue(item.id);
+                sentCount++;
+                sessionStorage.setItem('ileco_last_ref', resData.reference_id || 'N/A');
+
+                // ← THE ACTUAL FIX: if this queued item is the one currently
+                // shown as "💾 Report Saved Offline", upgrade that same screen
+                // into the full success view with reference number, priority,
+                // Messenger link, and Talk-to-Agent button — instead of only
+                // a toast that the user may not even see (dashboard blur, tab
+                // switch, screen off while reconnecting, etc.)
+                if (item.id === _pendingOfflineQueueId) {
+                    _pendingOfflineQueueId = null;
+                    buildAndShowSuccessUI(
+                        resData.reference_id || generateFallbackRefId(),
+                        item.payload,
+                        item.payload._client_priority || 'HIGH',
+                        resData.feeder_name || item.payload.feeder_name,
+                        resData.is_followup === true
+                    );
+                }
+            } else if (res.status === 429 || resData.error_code === 'ACTIVE_REPORT_EXISTS') {
+                // Genuine duplicate — won't resolve on retry, drop it
+                removeFromOfflineQueue(item.id);
+                failCount++;
+            } else if (res.status === 403) {
+                // Still invalid even after a fresh token — leave queued,
+                // try again on the next flush instead of losing the report.
+                continue;
+            } else if (res.status >= 400 && res.status < 500) {
+                // Other permanent client errors (bad payload, etc.) — drop.
+                removeFromOfflineQueue(item.id);
+                failCount++;
+            }
+            // 5xx or unexpected: leave queued, try again next time
+
+        } catch (err) {
+            // Still offline / network dropped mid-flush — stop, keep the rest queued
+            break;
+        }
+    }
+
+    _flushingQueue = false;
+
+    if (sentCount > 0) {
+        showToast(`📤 ${sentCount} queued report${sentCount > 1 ? 's' : ''} sent successfully.`, 'success', 5000);
+    }
+    if (failCount > 0) {
+        showToast(`⚠️ ${failCount} queued report${failCount > 1 ? 's' : ''} could not be sent and were removed.`, 'info', 6000);
+    }
+}
+
+let _pendingOfflineQueueId = null; // tracks which queued item is currently shown as "Saved Offline"
+
+function buildAndShowSuccessUI(refId, payload, priorityStr, feederName, isFollowup) {
+    sessionStorage.setItem('ileco_last_ref', refId);
+
+    const successTitle = isFollowup ? '📋 Follow-Up Recorded!' : '✅ Report Successfully Submitted!';
+    const successIntro = isFollowup
+        ? `<div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:14px;color:#78350f;">ℹ️ <strong>This is a follow-up to an earlier report.</strong><br>Your report count has been raised and our team has been notified.</div>`
+        : '';
+
+    const p    = (priorityStr || 'HIGH').toUpperCase();
+    const pCfg = {
+        CRITICAL:{ col:'#991b1b', bg:'#fee2e2', icon:'🚨', text:'Emergency response team alerted. Help is on the way.' },
+        HIGH:    { col:'#9a3412', bg:'#fed7aa', icon:'⚡', text:'Our team will respond urgently.' },
+        MEDIUM:  { col:'#4c1d95', bg:'#f3e8ff', icon:'🔦', text:'Our service team will schedule an inspection.' },
+    }[p] || { col:'#1e40af', bg:'#dbeafe', icon:'⚡', text:'Our team will respond.' };
+
+    const feederLine = feederName ? `<p><strong>⚡ Feeder:</strong> ${esc(feederName)}</p>` : '';
+    const approxNote = payload.is_approximate_location
+        ? `<div class="approx-note">📍 Location set from barangay selection (approximate). Tap the map or use GPS next time for faster dispatch.</div>` : '';
+
+    document.getElementById('successDetail').innerHTML = `
+        ${successIntro}
+        <div class="ref-box">
+            <div class="ref-lbl">Your Reference Number</div>
+            <div class="ref-id">${esc(refId)}</div>
+            <button class="copy-btn" onclick="copyRef('${esc(refId)}')">📋 Copy Reference Number</button>
+        </div>
+        <div style="background:${pCfg.bg};padding:13px;border-radius:10px;margin-bottom:13px;border:1px solid ${pCfg.col}20;">
+            <div style="font-size:17px;font-weight:700;color:${pCfg.col};margin-bottom:5px;">${pCfg.icon} ${p} PRIORITY</div>
+            <p style="color:${pCfg.col};margin:0;font-size:13px;">${pCfg.text}</p>
+        </div>
+        <div class="success-detail">
+            <p><strong>📍 Location:</strong> ${esc(payload.address)}</p>
+            ${feederLine}
+            ${approxNote}
+            <p><strong>📞 Contact:</strong> ${esc(payload.contact_number)}</p>
+            <p style="margin-top:10px;">✅ Your report has been received. Quote your reference number for any follow-up calls.</p>
+            <hr style="margin:12px 0;border:none;border-top:1px solid #e5e7eb;">
+            <p style="font-size:12px;color:#6b7280;">24/7 hotline: <strong><a href="tel:+639989893028" style="color:#1e40af;">09989893028</a></strong> (Globe)</p>
+        </div>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px;margin-top:14px;">
+            <div style="font-weight:700;color:#1e40af;font-size:14px;margin-bottom:6px;">💬 Need to add details or have another concern?</div>
+            <p style="font-size:13px;color:#1e3a8a;margin-bottom:12px;">
+                Chat with our ILECO-1 Messenger assistant anytime — quote
+                <strong>${esc(refId)}</strong> in follow-up report then track my report so we can pull up your report instantly.
+            </p>
+            <a href="${messengerLink('track_' + refId)}" target="_blank" rel="noopener"
+               style="display:flex;align-items:center;justify-content:center;gap:8px;background:#1877F2;color:#fff;text-decoration:none;font-weight:700;padding:11px;border-radius:10px;font-size:14px;margin-bottom:8px;">
+                💬 Open Messenger Chat
+            </a>
+            <a href="${messengerLink('talk_to_agent')}" target="_blank" rel="noopener"
+               style="display:flex;align-items:center;justify-content:center;gap:8px;background:#fff;color:#1877F2;text-decoration:none;font-weight:700;padding:11px;border-radius:10px;font-size:14px;border:2px solid #1877F2;">
+                🧑‍💼 Chat with an Live Agent
+            </a>
+            <p style="font-size:11px;color:#64748b;margin-top:8px;text-align:center;">
+                Opens Facebook Messenger. If it doesn't open automatically, search "ILECO-1" on Messenger and tap the chat.
+            </p>
+        </div>`;
+
+    document.getElementById('successWrap').querySelector('h3').textContent = successTitle;
+    document.getElementById('outageForm').style.display  = 'none';
+    document.getElementById('priorityBar').style.display = 'none';
+    document.getElementById('successWrap').style.display = 'block';
+    document.getElementById('successWrap').scrollIntoView({ behavior:'smooth' });
+    srAnnounce(`${isFollowup ? 'Follow-up' : 'Report'} submitted. Reference: ${refId}`);
+}
+function doSubmit(token, item) {
+    return fetch('/api/submit_power_outage', {
+        method: 'POST',
+        headers: {
+            'Content-Type':  'application/json',
+            'X-Form-Token':  token,
+            'X-Submit-Time': String(item.elapsedMs),
+        },
+        body: JSON.stringify(item.payload)
+    });
+}
+
+setInterval(saveDraft, 30_000);
+DRAFT_FIELDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', saveDraftDebounced);
+});
+setInterval(flushOfflineQueue, 45_000);
+// ═══════════════════════════════════════════════════════════════
+// LEAVE PAGE PROTECTION
+// ═══════════════════════════════════════════════════════════════
+let _formDirty  = false;
+let _submitted  = false;
+
+document.getElementById('outageForm').addEventListener('input', (e) => {
+    const val = e.target.value;
+    if (val && val.trim().length > 0) _formDirty = true;
+});
+
+window.addEventListener('beforeunload', e => {
+    if (_formDirty && !_submitted) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// DUPLICATE SUBMISSION GUARD
+// ═══════════════════════════════════════════════════════════════
+(function checkPrevSubmission() {
+    const prev = sessionStorage.getItem('ileco_last_ref');
+    if (prev) {
+        document.getElementById('dupRefDisplay').textContent = prev;
+        document.getElementById('dupBanner').style.display = 'block';
+        document.getElementById('outageForm').style.display = 'none';
+    }
+})();
+
+function dismissDupBanner() {
+    document.getElementById('dupBanner').style.display = 'none';
+    document.getElementById('outageForm').style.display = 'block';
+    sessionStorage.removeItem('ileco_last_ref');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MESSENGER BROWSER DETECTION
+// ═══════════════════════════════════════════════════════════════
+(function detectMessenger() {
+    const ua = navigator.userAgent || '';
+    if (/FBAN|FBAV|FB_IAB|MessengerForiOS/i.test(ua)) {
+        const el = document.getElementById('messengerWarn');
+        el.innerHTML = '<strong>📱 You appear to be using the Messenger browser.</strong><br>'
+            + 'GPS may not work here. Tap the <strong>⋯ menu → Open in Chrome</strong> (Android) '
+            + 'or <strong>Open in Safari</strong> (iPhone).<br>'
+            + '<span style="color:#92400e;">Or tap the map to pin your location manually.</span>';
+        el.classList.add('show');
+        document.getElementById('mapFallback').classList.add('show');
+    }
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// NETWORK STATUS
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('online',  () => {
+    document.getElementById('offlineBanner').classList.remove('show');
+    showToast('Back online', 'success', 2500);
+    flushOfflineQueue();
+});
+window.addEventListener('offline', () => {
+    const link = document.getElementById('offlineBannerMsgrLink');
+    if (link) link.href = messengerLink('talk_to_agent');
+    document.getElementById('offlineBanner').classList.add('show');
+    showToast('You are offline', 'info', 3000);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// TOAST & SR ANNOUNCE
+// ═══════════════════════════════════════════════════════════════
+let _activeToastCount = 0;
+const MAX_TOASTS = 3;
+
+function showToast(msg, type = 'info', ms = 4000) {
+    if (_activeToastCount >= MAX_TOASTS) return;
+    _activeToastCount++;
+    const t = document.createElement('div');
+    t.className = `toast toast-${type}`;
+    const icon = { error:'❌', success:'✅', info:'ℹ️' }[type] || 'ℹ️';
+    t.innerHTML = `<div class="toast-inner"><span>${icon}</span><span>${esc(msg)}</span></div>`;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => { requestAnimationFrame(() => t.classList.add('show')); });
+    setTimeout(() => {
+        t.classList.remove('show');
+        setTimeout(() => { t.remove(); _activeToastCount--; }, 350);
+    }, ms);
+}
+
+function srAnnounce(msg) {
+    const el = document.getElementById('sr-live');
+    if (el) { el.textContent = ''; setTimeout(() => { el.textContent = msg; }, 50); }
+}
+
+function showError(msg) {
+    const el = document.getElementById('errorMsg');
+    const lines = msg.split('\n');
+    if (lines.length > 1) {
+        const header = lines[0];
+        const items  = lines.slice(1).map(l => '<li>' + esc(l.replace(/^•\s*/, '')) + '</li>').join('');
+        el.innerHTML  = '<strong>' + esc(header) + '</strong><ul style="margin:8px 0 0 18px;line-height:1.8;">' + items + '</ul>';
+    } else {
+        el.textContent = msg;
+    }
+    el.style.display = 'block';
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => { el.style.display = 'none'; }, 12000);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PRIORITY TOGGLE
+// ═══════════════════════════════════════════════════════════════
+function togglePriorityInfo() {
+    const box = document.getElementById('priorityInfo');
+    const btn = document.getElementById('priToggleBtn');
+    const open = box.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open);
+    btn.textContent = open ? 'Hide ▴' : 'Priority levels ▾';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAP INITIALIZATION
+// ═══════════════════════════════════════════════════════════════
+const MAPBOX_TOKEN = '{{ mapbox_token }}';
+
+let _mapInitAttempts = 0;
+const MAP_INIT_MAX_ATTEMPTS = 25;
+
+function initMap() {
+    _mapInitAttempts++;
+    if (typeof L === 'undefined') {
+        if (_mapInitAttempts >= MAP_INIT_MAX_ATTEMPTS) {
+            document.getElementById('mapLoadError').classList.add('show');
+            document.getElementById('mapFallback').classList.add('show');
+            document.getElementById('map').style.display = 'none';
+            return;
+        }
+        setTimeout(initMap, 200);
+        return;
+    }
+
+    window._map = L.map('map', { zoomControl: false }).setView([10.7115, 122.4240], 11);
+    L.control.zoom({ position: 'bottomright' }).addTo(_map);
+
+    const layers = {
+        street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }),
+        satellite: L.tileLayer(
+            `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`,
+            { attribution: '© Mapbox', tileSize: 512, zoomOffset: -1, maxZoom: 22 }
+        )
+    };
+    layers.street.addTo(_map);
+    window._layers = layers;
+
+    const mapEl = document.getElementById('map');
+    const layerCtrl = document.createElement('div');
+    layerCtrl.className = 'layer-ctrl';
+    layerCtrl.innerHTML = `
+        <button class="layer-btn" id="layerBtn" type="button" aria-haspopup="true" aria-expanded="false">
+            <span>🗺️</span><span id="layerLabel">Map</span><span style="font-size:10px">▼</span>
+        </button>
+        <div class="layer-dropdown" id="layerDrop" role="menu">
+            <div class="layer-opt active" data-layer="street" role="menuitem" tabindex="0">🗺️ Map <span class="layer-check">✓</span></div>
+            <div class="layer-opt" data-layer="satellite" role="menuitem" tabindex="0">🛰️ Satellite <span class="layer-check">✓</span></div>
+        </div>`;
+    mapEl.appendChild(layerCtrl);
+
+    document.getElementById('layerBtn').addEventListener('click', e => {
+        e.stopPropagation();
+        const drop = document.getElementById('layerDrop');
+        const open = drop.classList.toggle('open');
+        e.currentTarget.setAttribute('aria-expanded', open);
+    });
+    document.addEventListener('click', () => {
+        document.getElementById('layerDrop').classList.remove('open');
+        document.getElementById('layerBtn').setAttribute('aria-expanded', false);
+    });
+
+    document.querySelectorAll('.layer-opt').forEach(opt => {
+        const activate = () => {
+            const sel = opt.dataset.layer;
+            _map.eachLayer(l => { if (l instanceof L.TileLayer) _map.removeLayer(l); });
+            document.querySelectorAll('.layer-opt').forEach(o => o.classList.remove('active'));
+            opt.classList.add('active');
+            layers[sel].addTo(_map);
+            document.getElementById('layerLabel').textContent = sel === 'street' ? 'Map' : 'Satellite';
+            document.getElementById('layerDrop').classList.remove('open');
+            setTimeout(() => _map.invalidateSize(), 300);
+        };
+        opt.addEventListener('click', activate);
+        opt.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); } });
+    });
+
+    _map.on('click', e => {
+        _map.setView(e.latlng, _map.getZoom());
+        updateMarker(e.latlng.lat, e.latlng.lng, null, false);
+        if (_isFullscreen) setTimeout(() => toggleMapFullscreen(), 600);
+    });
+
+    if ('ontouchstart' in window) { _map.touchZoom.enable(); _map.dragging.enable(); }
+}
+
+document.addEventListener('DOMContentLoaded', initMap);
+
+// ═══════════════════════════════════════════════════════════════
+// MAP STATE
+// ═══════════════════════════════════════════════════════════════
+let _marker = null, _circle = null, _centroidDot = null;
+let _lat = null, _lng = null, _accuracy = null;
+let _isPrecise    = false;
+let _isFullscreen = false;
+let _currentFeeder = null;
+let _feederAbortCtrl = null;
+let _feederDebounceTimer = null;
+const _feederCache = new Map(); // rounded "lat,lng" -> result, avoids re-querying same spot
+
+function updateMarker(lat, lng, accuracy, isCentroid) {
+    if (_marker)      { _map.removeLayer(_marker);      _marker      = null; }
+    if (_circle)      { _map.removeLayer(_circle);      _circle      = null; }
+    if (_centroidDot) { _map.removeLayer(_centroidDot); _centroidDot = null; }
+
+    _lat = lat; _lng = lng; _accuracy = accuracy;
+    const coordEl = document.getElementById('coordInfo');
+
+    if (!isCentroid) {
+        _isPrecise = true;
+        document.getElementById('centroidWarn').classList.remove('show');
+    }
+
+    if (accuracy) {
+        coordEl.className = 'coord-info selected';
+        _circle = L.circle([lat, lng], { radius: Math.min(accuracy, 30), color: '#059669', fillColor: '#10b981', fillOpacity: .2 }).addTo(_map);
+        _marker = L.circleMarker([lat, lng], { radius: 8, color: '#047857', fillColor: '#10b981', fillOpacity: 1 }).addTo(_map);
+        coordEl.innerHTML = `✅ GPS pinned (±${accuracy.toFixed(0)}m) — address auto-filled`;
+        reverseGeocode(lat, lng);
+    } else if (isCentroid) {
+        coordEl.className = 'coord-info approx';
+        _marker = L.circleMarker([lat, lng], {
+            radius: 16, color: '#f59e0b', fillColor: '#fbbf24',
+            fillOpacity: .25, dashArray: '7,5', weight: 3
+        }).addTo(_map);
+        _centroidDot = L.circleMarker([lat, lng], { radius: 4, color: '#92400e', fillColor: '#92400e', fillOpacity: 1, weight: 0 }).addTo(_map);
+        coordEl.innerHTML = '⚠️ Approximate location (barangay centre). Tap map or use GPS for exact spot.';
+    } else {
+        coordEl.className = 'coord-info selected';
+        _marker = L.marker([lat, lng]).addTo(_map);
+        coordEl.innerHTML = '✅ Location pinned — address auto-filled above.';
+        reverseGeocode(lat, lng);
+    }
+
+    checkFeeder(lat, lng);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GPS
+// ═══════════════════════════════════════════════════════════════
+function getMyLocation() {
+    const ua = navigator.userAgent || '';
+    const isMessenger = /FBAN|FBAV|FB_IAB|MessengerForiOS/i.test(ua);
+    if (isMessenger) showToast('GPS may not work in Messenger. Tap ⋯ → Open in Chrome/Safari, or tap the map to pin.', 'info', 7000);
+    if (!navigator.geolocation) { showError('Geolocation not supported by your browser.'); return; }
+
+    const btn = document.getElementById('gpsBtn');
+    const coordEl = document.getElementById('coordInfo');
+    coordEl.textContent = '🔍 Requesting GPS… tap Allow when prompted.';
+    coordEl.className = 'coord-info';
+    btn.disabled = true; btn.textContent = '⏳ Waiting for GPS…';
+
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+            _map.setView([lat, lng], 17);
+            updateMarker(lat, lng, accuracy, false);
+            btn.disabled = false; btn.textContent = '✅ GPS Location Set';
+            setTimeout(() => btn.textContent = '📡 Update GPS Location', 3000);
+            srAnnounce(`GPS location obtained with ${accuracy.toFixed(0)} metres accuracy.`);
+        },
+        err => {
+            const msgs = {
+                1: isMessenger ? '❌ GPS blocked — tap ⋯ → Open in Chrome or Safari, then try again' : '❌ Location access denied — enable in browser settings or tap the map.',
+                2: '❌ Location unavailable — tap the map to set manually.',
+                3: '⏱️ GPS timed out — tap the map to set manually.'
+            };
+            showError(msgs[err.code] || 'GPS error — tap the map to set your location.');
+            document.getElementById('mapFallback').classList.add('show');
+            btn.disabled = false; btn.textContent = '🔄 Try GPS Again';
+        },
+        { enableHighAccuracy: true, timeout: 30_000, maximumAge: 0 }
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REVERSE GEOCODE
+// ═══════════════════════════════════════════════════════════════
+async function reverseGeocode(lat, lng) {
+    try {
+        const r = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
+            { headers: { 'User-Agent': 'ILECO1-OutageForm/1.0' } }
+        );
+        const d = await r.json();
+        let addr = '';
+        if (d.address) {
+            const a = d.address;
+            const parts = [a.road, a.suburb || a.village || a.neighbourhood,
+                           a.municipality || a.city || a.town, a.province].filter(Boolean);
+            addr = parts.join(', ');
+        }
+        const inp = document.getElementById('address');
+        inp.value = addr || d.display_name || '';
+        inp.classList.add('address-suggested');
+        setTimeout(() => inp.classList.remove('address-suggested'), 1200);
+        validateField('address');
+    } catch { /* non-fatal */ }
+}
+
+function checkFeeder(lat, lng) {
+    clearTimeout(_feederDebounceTimer);
+    _feederDebounceTimer = setTimeout(() => _checkFeederNow(lat, lng), 150);
+}
+
+function _feederCacheKey(lat, lng) {
+    // Round to ~11m precision — same tap-area reuses cached result instantly
+    return `${lat.toFixed(4)},${lng.toFixed(4)}`;
+}
+
+async function _checkFeederNow(lat, lng) {
+    const div    = document.getElementById('feederInfo');
+    const strip  = document.getElementById('outageStatusStrip');
+    _currentFeeder = null;
+    div.style.display = 'block';
+    strip.className = 'outage-status-strip';
+
+    const cacheKey = _feederCacheKey(lat, lng);
+    const cached = _feederCache.get(cacheKey);
+    if (cached) {
+        _renderFeederResult(cached, div, strip);
+        return;
+    }
+
+    div.innerHTML = `<div class="feeder-card checking">
+        <div class="feeder-pulse"></div>
+        <div class="feeder-body">
+            <div class="feeder-lbl">Feeder Detection</div>
+            <div class="feeder-name">Identifying your feeder…</div>
+            <div class="feeder-note">Querying spatial database</div>
+        </div></div>`;
+
+    // Cancel any still-running previous request so stale responses can't overwrite the UI
+    if (_feederAbortCtrl) _feederAbortCtrl.abort();
+    _feederAbortCtrl = new AbortController();
+
+    try {
+        const res = await fetch('/api/check_feeder', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat, lng }),
+            signal: _feederAbortCtrl.signal
+        });
+        if (!res.ok) throw new Error(`${res.status}`);
+        const d = await res.json();
+        _feederCache.set(cacheKey, d);
+        _renderFeederResult(d, div, strip);
+        return;
+    } catch (err) {
+        if (err.name === 'AbortError') return; // superseded by a newer click — do nothing
+        div.innerHTML = `<div class="feeder-card outside">
+            <div class="feeder-icon">⚠️</div>
+            <div class="feeder-body">
+                <div class="feeder-lbl">Feeder Detection</div>
+                <div class="feeder-name">Temporarily unavailable</div>
+                <div class="feeder-note">Your report will still be accepted.</div>
+            </div></div>`;
+        strip.className = 'outage-status-strip';
+    }
+}
+
+function _renderFeederResult(d, div, strip) {
+
+        if (d.success && d.feeder) {
+        _currentFeeder = d.feeder;
+        const isNearest = d.method === 'nearest';
+        const cardClass = isNearest ? 'nearest' : 'inside';
+        const label     = isNearest ? 'Nearest Feeder Zone' : 'Your Feeder Coverage Area';
+        const icon      = isNearest ? '📍' : '⚡';
+        const pill      = isNearest ? `~${esc(String(d.distance_km))} km away` : 'Inside zone';
+
+        div.innerHTML = `<div class="feeder-card ${cardClass}">
+            <div class="feeder-icon">${icon}</div>
+            <div class="feeder-body">
+                <div class="feeder-lbl">${label}</div>
+                <div class="feeder-name">${esc(d.feeder)}</div>
+                <div class="feeder-meta">
+                    <span class="feeder-pill">⚡ ${pill}</span>
+                    <span class="feeder-pill">🗂️ Auto-routed ✓</span>
+                </div>
+            </div></div>`;
+
+        if (d.is_active) {
+            strip.className = 'outage-status-strip outage-active';
+            strip.innerHTML = '⚠️ &nbsp;<span>A <strong>known active outage</strong> exists on '
+                + esc(d.feeder) + '. Our crew is already working on it. '
+                + 'Your report will still be recorded and linked to this incident.</span>';
+        } else {
+            strip.className = 'outage-status-strip';
+        }
+
+        srAnnounce(`Feeder detected: ${d.feeder}.`);
+    } else {
+        div.innerHTML = `<div class="feeder-card outside">
+            <div class="feeder-icon">🔍</div>
+            <div class="feeder-body">
+                <div class="feeder-lbl">Feeder Zone</div>
+                <div class="feeder-name">Outside mapped zones</div>
+                <div class="feeder-note">Your report will be reviewed manually.</div>
+            </div></div>`;
+        strip.className = 'outage-status-strip';
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// FULLSCREEN MAP
+// ═══════════════════════════════════════════════════════════════
+function toggleMapFullscreen() {
+    const mc      = document.getElementById('mapContainer');
+    const icon    = document.getElementById('fsIcon');
+    const hint    = document.getElementById('fsHint');
+    const coordEl = document.getElementById('coordInfo');
+    _isFullscreen = !_isFullscreen;
+
+    if (_isFullscreen) {
+        mc.classList.add('fullscreen');
+        document.getElementById('map').style.cssText = 'height:100vh;width:100vw;';
+        icon.textContent = '✕';
+        document.body.style.overflow = 'hidden';
+        document.body.classList.add('map-is-fullscreen');
+        hint.classList.add('show');
+        setTimeout(() => hint.classList.remove('show'), 4000);
+        coordEl.style.cssText = `
+            position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
+            z-index: 10001; min-width: 280px; max-width: 90vw; text-align: center;
+            box-shadow: 0 4px 16px rgba(0,0,0,.30); border-radius: 12px;
+            padding: 12px 18px; background: white;`;
+    } else {
+        mc.classList.remove('fullscreen');
+        document.getElementById('map').style.cssText = '';
+        icon.textContent = '⛶';
+        document.body.style.overflow = '';
+        document.body.classList.remove('map-is-fullscreen');
+        hint.classList.remove('show');
+        coordEl.style.cssText = 'margin-top:10px;';
+    }
+    setTimeout(() => _map.invalidateSize(), 300);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// TOWN / BARANGAY DROPDOWNS
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('town').addEventListener('change', function() {
+    const town = this.value;
+    const sel  = document.getElementById('barangay');
+
+    // Repopulate barangay dropdown
+    sel.innerHTML = '<option value="">Select Barangay</option>';
+    (barangaysByTown[town] || []).forEach(b => {
+        const o = document.createElement('option');
+        o.value = b; o.textContent = b;
+        sel.appendChild(o);
+    });
+    sel.value = ''; // clear any stale barangay selection
+
+    // ── THE FIX: changing the town invalidates any previously-pinned
+    // GPS/map location — it was set for the OLD town. Without this reset,
+    // _isPrecise stayed true forever after the first map click, so every
+    // later town/barangay change skipped the address/marker update entirely.
+    _isPrecise = false;
+
+    // Reset location state
+    document.getElementById('centroidWarn').classList.remove('show');
+    document.getElementById('outageStatusStrip').className = 'outage-status-strip';
+
+    if (town) {
+        // Always write a placeholder address whenever town changes,
+        // now that _isPrecise no longer blocks this.
+        const addr = document.getElementById('address');
+        const current = addr.value.trim();
+        if (!_userEditedAddress || !current || current.endsWith(', Iloilo')) {
+            addr.value = town + ', Iloilo';
+            _userEditedAddress = false; // still auto-generated
+            addr.classList.add('address-suggested');
+            setTimeout(() => addr.classList.remove('address-suggested'), 1200);
+            validateField('address');
+        }
+
+        // Pan map to the average centroid of all barangays in this town
+        const coords = Object.values(getTownCentroids(town));
+        if (coords.length && window._map) {
+            const avgLat = coords.reduce((s, c) => s + c[0], 0) / coords.length;
+            const avgLng = coords.reduce((s, c) => s + c[1], 0) / coords.length;
+            _map.setView([avgLat, avgLng], 12);
+        }
+    }
+
+    validateField('town');
+    validateField('barangay');
+    updateProgress();
+    saveDraft();
+});
+
+document.getElementById('barangay').addEventListener('change', function() {
+    validateField('barangay');
+    const town = document.getElementById('town').value;
+    const brgy = this.value;
+    if (!town || !brgy) { updateProgress(); return; }
+
+    // ── THE FIX: a new barangay selection means the person wants THIS
+    // location, not whatever they pinned earlier. Without resetting
+    // _isPrecise here, once it was true from an earlier map tap it
+    // stayed true forever, and every later barangay change silently
+    // kept the OLD pin/address instead of updating to the new one.
+    _isPrecise = false;
+
+    // Small helper so the address textbox is filled the SAME way
+    // whether or not we found exact coordinates for this barangay.
+    function fillAutoAddress() {
+        const addr = document.getElementById('address');
+        const current = addr.value.trim();
+        const isAutoAddr = !_userEditedAddress || !current || current.endsWith(', Iloilo');
+        if (isAutoAddr) {
+            addr.value = `Brgy. ${brgy}, ${town}, Iloilo`;
+            _userEditedAddress = false; // still auto-generated
+            addr.classList.add('address-suggested');
+            setTimeout(() => addr.classList.remove('address-suggested'), 1200);
+            validateField('address');
+        }
+    }
+
+    const coords = getBarangayCentroid(town, brgy); // ← fault-tolerant lookup
+    if (coords) {
+        const [lat, lng] = coords;
+        if (window._map) _map.setView([lat, lng], 15);
+
+        updateMarker(lat, lng, null, true);
+        fillAutoAddress();
+        document.getElementById('centroidWarn').classList.add('show');
+        srAnnounce(`Map panned to ${brgy}, ${town}. Tap the map to pin your exact location.`);
+    } else {
+        // No centroid coordinates found for this barangay — still fill
+        // the address from what we know (town + barangay) rather than
+        // leaving it blank or stale.
+        fillAutoAddress();
+        document.getElementById('mapFallback').classList.add('show');
+        showToast(`📍 Address filled from ${brgy}. Tap the map or use GPS to pin your exact spot.`, 'info', 5000);
+    }
+    updateProgress();
+    saveDraft();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// PROGRESS BAR
+// ═══════════════════════════════════════════════════════════════
+function updateProgress() {
+    const step1Done = document.getElementById('fullName').value.trim().length >= 2
+        && /^09\d{9}$/.test(document.getElementById('contactNumber').value.trim())
+        && document.getElementById('town').value
+        && document.getElementById('barangay').value;
+    const step2Done = document.getElementById('address').value.trim().length >= 5;
+    const step3Done = document.getElementById('details').value.trim().length >= 15;
+
+    const [p1, p2, p3] = ['prog1','prog2','prog3'].map(id => document.getElementById(id));
+    const label = document.getElementById('progLabel');
+
+    if (step3Done) {
+        [p1,p2,p3].forEach(p => p.className = 'progress-step done');
+        label.textContent = '✅ Ready to submit';
+    } else if (step2Done) {
+        p1.className = 'progress-step done'; p2.className = 'progress-step done'; p3.className = 'progress-step active';
+        label.textContent = 'Step 3 of 3 — Describe the incident';
+    } else if (step1Done) {
+        p1.className = 'progress-step done'; p2.className = 'progress-step active'; p3.className = 'progress-step';
+        label.textContent = 'Step 2 of 3 — Set your location';
+    } else {
+        p1.className = 'progress-step active'; p2.className = 'progress-step'; p3.className = 'progress-step';
+        label.textContent = 'Step 1 of 3 — Contact info';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PHONE NUMBER NORMALIZATION
+// Handles +639XXXXXXXXX, 639XXXXXXXXX, and 09XXXXXXXXX input,
+// all converted to the canonical 09XXXXXXXXX (11-digit) format.
+// ═══════════════════════════════════════════════════════════════
+function normalizePhoneNumber(v) {
+    if (!v) return '';
+    let n = String(v).replace(/[\s\-().]/g, ''); // strip spaces, dashes, parens, dots
+    if (n.startsWith('+63')) {
+        n = '0' + n.slice(3);
+    } else if (n.startsWith('63') && n.length === 12) {
+        n = '0' + n.slice(2);
+    } else if (n.startsWith('+0')) {
+        n = n.slice(1); // guards against stray "+09..." paste
+    }
+    return n;
+}
+// ═══════════════════════════════════════════════════════════════
+// VALIDATORS
+// ═══════════════════════════════════════════════════════════════
+// Fields that are genuinely optional — an empty value is always
+// acceptable and must NEVER be styled as invalid/required.
+const OPTIONAL_FIELDS = new Set(['email', 'accountNumber']);
+
+const validators = {
+    fullName:      v => (!v || v.trim().length < 2) ? 'Please enter your full name (at least 2 characters)' : null,
+    contactNumber: v => {
+        if (!v) return 'Required';
+        const normalized = normalizePhoneNumber(v);
+        return /^09\d{9}$/.test(normalized) ? null : 'Enter a valid 11-digit mobile number (e.g. 09171234567)';
+    },
+    // Optional — empty is fine. Only validate FORMAT if the person typed something.
+    email:         v => (!v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) ? null : 'Invalid email format',
+    // Optional — empty is fine. Format check mirrors the backend rule
+    // (letters/numbers/hyphens, 1-30 chars) so front and back agree.
+    accountNumber: v => (!v || /^[A-Za-z0-9\-]{1,30}$/.test(v.trim())) ? null : 'Account number may only contain letters, numbers, and hyphens',
+    address:       v => (!v || v.trim().length < 5) ? 'Please provide a complete address (at least your barangay and town)' : null,
+    details:       v => (!v || v.trim().length < 1) ? 'Please describe the incident' : null,
+    town:          v => (!v || v === '') ? 'Please select your town/municipality' : null,
+    barangay:      v => (!v || v === '') ? 'Please select your barangay' : null,
+};
+
+function validateField(id) {
+    const fn = validators[id]; if (!fn) return true;
+    const el = document.getElementById(id);
+    const sp = document.getElementById(`err-${id}`);
+    if (!el) return true;
+
+    const isEmptyOptional = OPTIONAL_FIELDS.has(id) && !el.value.trim();
+    if (isEmptyOptional) {
+        // Never mark an empty optional field as valid or invalid —
+        // it has nothing to validate and must not look "required".
+        el.classList.remove('invalid', 'valid');
+        el.setAttribute('aria-invalid', 'false');
+        if (sp) sp.textContent = '';
+        return true;
+    }
+
+    const err = fn(el.value);
+    el.classList.toggle('invalid', !!err);
+    el.classList.toggle('valid',   !err);
+    el.setAttribute('aria-invalid', err ? 'true' : 'false');
+    if (sp) sp.textContent = err || '';
+    return !err;
+}
+
+['fullName','contactNumber','email','accountNumber','address','details','town','barangay'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('blur',   () => {
+        // Rewrite the visible value to canonical 09XXXXXXXXX before validating
+        if (id === 'contactNumber' && el.value.trim()) {
+            const normalized = normalizePhoneNumber(el.value);
+            if (normalized !== el.value) el.value = normalized;
+        }
+        validateField(id);
+        updateProgress();
+    });
+    el.addEventListener('input',  () => {
+        if (el.classList.contains('invalid')) {
+            el.classList.remove('invalid');
+            const sp = document.getElementById(`err-${id}`);
+            if (sp) sp.textContent = '';
+        }
+        // Optional field cleared back to empty — strip any leftover styling immediately
+        if (OPTIONAL_FIELDS.has(id) && !el.value.trim()) {
+            el.classList.remove('invalid', 'valid');
+        }
+        // If user manually edits address, mark it as user-modified
+        if (id === 'address') _userEditedAddress = true;
+        updateProgress();
+    });
+    if (el.tagName === 'SELECT') el.addEventListener('change', () => { validateField(id); updateProgress(); });
+});
+
+// Track whether user has genuinely custom-typed the address
+// (we check content, not keystrokes, to avoid false positives from Tab/arrows)
+let _userEditedAddress = false;
+document.getElementById('address').addEventListener('input', function() {
+    const v = this.value.trim();
+    // If the value is empty or still ends with ", Iloilo" it's auto-generated
+    if (v && !v.endsWith(', Iloilo')) {
+        _userEditedAddress = true;
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ACCOUNT NUMBER LIVE CONFIRMATION
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('accountNumber').addEventListener('input', function() {
+    const box = document.getElementById('accountConfirm');
+    if (this.value.trim()) {
+        box.innerHTML = `<div style="background:#f0fdf4;border:1px solid #10b981;padding:8px 12px;border-radius:8px;color:#065f46;font-size:12px;">✅ Account number recorded: ${esc(this.value.trim())}</div>`;
+        box.classList.add('show');
+    } else {
+        box.innerHTML = '';
+        box.classList.remove('show');
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// PHOTO ATTACHMENTS
+// ═══════════════════════════════════════════════════════════════
+const MAX_PHOTOS = 3;
+const _photoUrls = [];
+
+function compressImage(file, maxDim = 1024, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const reader = new FileReader();
+        reader.onload = e => { img.src = e.target.result; };
+        reader.onerror = reject;
+        img.onload = () => {
+            let { width, height } = img;
+            if (width > height && width > maxDim) { height *= maxDim / width; width = maxDim; }
+            else if (height > maxDim) { width *= maxDim / height; height = maxDim; }
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+            canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Compression failed')),
+                           'image/jpeg', quality);
+        };
+        img.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+function renderPhotoPreview(url, isVideo) {
+    const wrap = document.getElementById('photoPreviews');
+    const box  = document.createElement('div');
+    box.style.cssText = 'position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;border:2px solid var(--gray-300);background:#000;';
+    const mediaHtml = isVideo
+        ? `<video src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;" muted></video>
+           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font-size:22px;text-shadow:0 1px 4px rgba(0,0,0,.7);">▶️</div>`
+        : `<img src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;">`;
+    box.innerHTML = `${mediaHtml}
+        <button type="button" aria-label="Remove ${isVideo ? 'video' : 'photo'}" style="position:absolute;top:2px;right:2px;width:22px;height:22px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;font-size:14px;line-height:1;">×</button>`;
+    box.querySelector('button').addEventListener('click', () => {
+        const idx = _photoUrls.indexOf(url);
+        if (idx > -1) _photoUrls.splice(idx, 1);
+        box.remove();
+        // FIX: keep the "X/3 files attached" counter in sync after removal —
+        // previously this text only updated inside the upload handler, so
+        // removing a photo left a stale count on screen until the next upload.
+        const statusEl = document.getElementById('photoStatus');
+        statusEl.textContent = _photoUrls.length
+            ? `${_photoUrls.length}/${MAX_PHOTOS} file(s) attached`
+            : '';
+    });
+    wrap.appendChild(box);
+}
+
+document.getElementById('photoInput').addEventListener('change', async function(e) {
+    const files = Array.from(e.target.files || []);
+    const statusEl = document.getElementById('photoStatus');
+    if (_photoUrls.length + files.length > MAX_PHOTOS) {
+        showToast(`⚠️ Maximum ${MAX_PHOTOS} files. Extra files were ignored.`, 'info', 4000);
+    }
+    const remaining = MAX_PHOTOS - _photoUrls.length;
+    const toUpload  = files.slice(0, Math.max(0, remaining));
+
+    for (const file of toUpload) {
+        const isVideo = file.type.startsWith('video/');
+        try {
+            if (isVideo && file.size > 20 * 1024 * 1024) {
+                showToast(`❌ ${file.name} is over 20MB. Please choose a shorter clip.`, 'error');
+                continue;
+            }
+            statusEl.textContent = `📤 Uploading ${file.name}…`;
+            const token = await ensureFormToken();
+            if (!token) { showToast('⚠️ Session expired — refresh the page to attach files.', 'error'); break; }
+
+            const fd = new FormData();
+            if (isVideo) {
+                fd.append('photo', file, file.name); // send raw, no canvas compression for video
+            } else {
+                const blob = await compressImage(file);
+                fd.append('photo', blob, 'photo.jpg');
+            }
+
+            const res    = await fetch('/api/upload_outage_photo', {
+                method: 'POST', headers: { 'X-Form-Token': token }, body: fd
+            });
+            const result = await res.json();
+            if (result.success && result.url) {
+                _photoUrls.push(result.url);
+                renderPhotoPreview(result.url, isVideo);
+            } else {
+                showToast('❌ ' + (result.error || 'Upload failed'), 'error');
+            }
+        } catch (err) {
+            showToast(`❌ Could not process ${isVideo ? 'video' : 'photo'}. Try a smaller file.`, 'error');
+        }
+    }
+    statusEl.textContent = _photoUrls.length ? `${_photoUrls.length}/${MAX_PHOTOS} file(s) attached` : '';
+    e.target.value = '';
+});
+
+// ═══════════════════════════════════════════════════════════════
+// CHARACTER COUNTER
+// ═══════════════════════════════════════════════════════════════
+const detailsEl = document.getElementById('details');
+const counterEl = document.getElementById('detailsCounter');
+function updateCounter() {
+    const len = detailsEl.value.trim().length;
+    if (len === 0)     { counterEl.className='char-counter danger'; counterEl.textContent='Please enter a description'; }
+    else if (len < 20) { counterEl.className='char-counter warn';   counterEl.textContent=`${len} characters — more detail helps us respond faster`; }
+    else               { counterEl.className='char-counter ok';     counterEl.textContent=`${len} / 2000 characters ✓`; }
+}
+detailsEl.addEventListener('input', () => { updateCounter(); updatePriorityBar(); updateProgress(); });
+updateCounter();
+
+// ═══════════════════════════════════════════════════════════════
+// PRIORITY BAR
+// ═══════════════════════════════════════════════════════════════
+let _currentPriority = 'high';
+function updatePriorityBar() {
+    const type = document.getElementById('incidentType').value;
+    const det  = document.getElementById('details').value;
+    const bar  = document.getElementById('priorityBar');
+    const critTypes = ['fallen_wire','fire_hazard','transformer_issue','sparking','leaning_pole','vehicular_accident'];
+    const critWords = ['fire','explosion','burning','fallen wire','electric shock','live wire',
+                       'sparking','arcing','injured','death','pole down','wire down',
+                       'short circuit','about to fall','blocking road','leaning badly','tilted'];
+    let priority = 'high';
+   if (type === 'sdi_problem' || type === 'streetlight' || type === 'vegetation_clearing') priority = 'medium';
+    else if (critTypes.includes(type) || critWords.some(w => det.toLowerCase().includes(w))) priority = 'critical';
+
+    _currentPriority = priority;
+    const cfg = {
+        critical:{ cls:'critical', icon:'🚨', label:'CRITICAL PRIORITY', desc:'Emergency team dispatched immediately — within <strong>30 minutes</strong>.' },
+        high:    { cls:'high',     icon:'⚡', label:'HIGH PRIORITY',     desc:'Urgent response — within <strong>2 hours</strong>.' },
+        medium:  { cls:'medium',   icon:'🔦', label:'MEDIUM PRIORITY',   desc:'Scheduled response — within <strong>24–48 hours</strong>.' },
+    }[priority];
+    bar.className = `priority-bar ${cfg.cls} show`;
+    bar.innerHTML = `<span class="priority-icon">${cfg.icon}</span><div><strong>${cfg.label}</strong><div style="font-size:13px;font-weight:normal;opacity:.9;margin-top:2px;">${cfg.desc}</div></div>`;
+
+    const btn = document.getElementById('submitBtn');
+    if (btn && !btn.disabled) {
+        btn.innerHTML = priority === 'medium' ? '📋 Send Report' : '⚡ Send Emergency Report';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INCIDENT GUIDANCE
+// ═══════════════════════════════════════════════════════════════
+const guidanceMap = {
+    power_outage:     ['outage',   '<h5>💡 Reporting a Brownout?</h5><ul><li>Check your <strong>circuit breaker</strong> first.</li><li>Are neighbours also affected, or just your house?</li><li>Your <strong>meter number</strong> (on your bill) is very helpful.</li></ul>'],
+    sdi_problem:      ['sdi',      '<h5>🏠 No power in your house only?</h5><ul><li>Check if the service wire from the pole is disconnected.</li><li>Is there a burning smell or sparking near your meter?</li></ul>'],
+    voltage_issue:    ['outage',   '<h5>⚡ Voltage Problem?</h5><ul><li>Too <strong>high</strong> (lights very bright) or <strong>low</strong> (dim/slow fans)?</li><li>Have appliances been damaged?</li></ul>'],
+    fallen_wire:      ['critical', '<h5>🚨 DANGER — Fallen Wire!</h5><ul><li><strong>STAY AWAY</strong> — minimum 10 metres from the wire.</li><li>Call <strong>09989893028</strong> immediately.</li><li>Warn pedestrians and motorists.</li></ul>'],
+    leaning_pole:     ['critical', '<h5>⚠️ Leaning or Damaged Pole</h5><ul><li>Keep everyone away from the pole and any attached wires.</li><li>📷 A photo really helps our crew assess the urgency.</li><li>Note if it is blocking a road or near a house.</li></ul>'],
+    tree_branch:      ['outage',   '<h5>🌳 Tree or Branch on the Line?</h5><ul><li>Do <strong>not</strong> attempt to remove it yourself — the line may still be live.</li><li>📷 A photo helps our crew bring the right equipment.</li></ul>'],
+    streetlight:      ['outage',   '<h5>💡 Streetlight Issue</h5><ul><li>Note the <strong>pole number</strong> or nearest landmark.</li><li>Is it completely off, flickering, or staying on during the day?</li></ul>'],
+    fire_hazard:      ['critical', '<h5>🔥 Fire or Burning Smell</h5><ul><li>Call <strong>BFP 911</strong> first if fire is active.</li><li>Turn off your main circuit breaker if safe.</li><li>Evacuate immediately.</li></ul>'],
+    transformer_issue:['critical', '<h5>💥 Transformer Problem</h5><ul><li>Keep everyone <strong>30 metres away</strong>.</li><li>Do NOT throw water on electrical fires.</li><li>Note the <strong>pole number</strong> if visible.</li></ul>'],
+    sparking:         ['critical', '<h5>⚡ Sparking or Arcing</h5><ul><li>Keep everyone away.</li><li>Turn off your main breaker if safe.</li><li>Note if it&#39;s from wire, meter, or appliance.</li></ul>'],
+    equipment_damage: ['outage',   '<h5>🔧 Equipment Damage</h5><ul><li>Note the location of the damaged equipment.</li><li>📷 Photos help us assess the extent of the damage.</li></ul>'],
+    vegetation_clearing: ['outage',
+  '<h5>🌳 Requesting Tree/Vegetation Clearing?</h5>' +
+  '<ul><li>Use this if a tree/branch is <strong>growing near</strong> the line but not yet touching it.</li>' +
+  '<li>If it is already touching, sparking, or a wire is down, select <strong>“Tree / Branch on Power Line”</strong> instead — that gets urgent dispatch.</li>' +
+  '<li>📷 A photo helps our crew schedule the right equipment.</li></ul>'],
+  vehicular_accident: ['critical',
+  '<h5>🚗 Vehicle Hit a Pole or Line?</h5>' +
+  '<ul><li><strong>Check for injuries first</strong> — call 911/BFP if anyone is hurt.</li>' +
+  '<li><strong>STAY AWAY</strong> from any wire touching or near the vehicle — treat it as live.</li>' +
+  '<li>Note if the road is blocked and warn other motorists.</li>' +
+  '<li>📷 A photo helps our crew and any insurance/police follow-up.</li></ul>'],
+};
+
+document.getElementById('incidentType').addEventListener('change', function() {
+    updatePriorityBar();
+    const box = document.getElementById('incidentGuidance');
+    const cfg = guidanceMap[this.value];
+    if (cfg) { box.className=`incident-guidance ${cfg[0]}`; box.innerHTML=cfg[1]; box.style.display='block'; }
+    else      { box.style.display='none'; }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// TIME FIELD
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('incidentTime').value = new Date().toTimeString().slice(0,5);
+document.getElementById('incidentTime').addEventListener('change', function() {
+    const now = new Date();
+    const [h,m] = this.value.split(':').map(Number);
+    const entered = new Date(); entered.setHours(h,m,0,0);
+    document.getElementById('timeWarning').style.display = entered > now ? 'block' : 'none';
+});
+
+// ═══════════════════════════════════════════════════════════════
+// CONSENT HELPERS
+// ═══════════════════════════════════════════════════════════════
+function showConsentError() {
+    const card   = document.getElementById('privacyCard');
+    const errMsg = document.getElementById('consentErrorMsg');
+    const wrap   = document.getElementById('consentCheckWrap');
+    card.classList.add('consent-error');
+    errMsg.classList.add('show');
+    wrap.classList.add('checkbox-error');
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('consentCheck').addEventListener('change', clearConsentError, { once: true });
+}
+
+function clearConsentError() {
+    document.getElementById('privacyCard').classList.remove('consent-error');
+    document.getElementById('consentErrorMsg').classList.remove('show');
+    document.getElementById('consentCheckWrap').classList.remove('checkbox-error');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FORM SUBMISSION
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('outageForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const now = Date.now();
+    if (now - _lastClientSubmit < CLIENT_MIN_INTERVAL && _lastClientSubmit > 0) {
+        const wait = Math.ceil((CLIENT_MIN_INTERVAL - (now - _lastClientSubmit)) / 1000);
+        showToast(`⏳ Please wait ${wait}s before submitting again.`, 'info', 4000);
+        return;
+    }
+
+    const consent = document.getElementById('consentCheck');
+    if (!consent.checked) {
+        showConsentError();
+        srAnnounce('You must agree to the privacy notice before submitting.');
+        return;
+    } else {
+        clearConsentError();
+    }
+
+    if (!_lat || !_lng) {
+        const addr = document.getElementById('address').value.trim();
+        if (!addr || addr.length < 5) {
+            showError('⚠️ Please pin your location on the map or type your complete address (Barangay + Town).');
+            document.getElementById('mapFallback').classList.add('show');
+            document.getElementById('address').scrollIntoView({ behavior:'smooth', block:'center' });
+            return;
+        }
+        showToast('📍 Submitting without map pin — your typed address will be used.', 'info', 5000);
+    } else if (!_isPrecise) {
+        showToast('📍 Using approximate barangay location. Tap the map next time for faster crew dispatch.', 'info', 5000);
+    }
+
+    const fields    = ['fullName','contactNumber','email','address','details','town','barangay'];
+    let firstErr    = null;
+    const errorList = [];
+    const labels    = {
+        fullName:'👤 Full Name', contactNumber:'📱 Contact Number',
+        email:'📧 Email', address:'📍 Complete Address',
+        details:'📝 Description', town:'🏙️ Town / Municipality', barangay:'📍 Barangay',
+    };
+
+    for (const id of fields) {
+        const ok = validateField(id);
+        if (!ok) {
+            const el = document.getElementById(id);
+            if (!firstErr) firstErr = el;
+            errorList.push(labels[id] || id);
+        }
+    }
+
+    if (errorList.length > 0) {
+        if (firstErr) { firstErr.scrollIntoView({ behavior:'smooth', block:'center' }); firstErr.focus(); }
+        showError('⚠️ Please fix ' + (errorList.length === 1 ? 'this field' : 'these fields') + ' before submitting:\n• ' + errorList.join('\n• '));
+        showToast('❌ ' + errorList.length + ' field' + (errorList.length > 1 ? 's need' : ' needs') + ' attention: ' + errorList.join(', '), 'error', 7000);
+        return;
+    }
+const btn = document.getElementById('submitBtn');
+    btn.disabled = true; btn.textContent = '⏳ Submitting Report…';
+    document.getElementById('errorMsg').style.display = 'none';
+
+    // ── FIX: don't lock the 60s cooldown until we know this submission
+    // actually went through. Previously _lastClientSubmit was stamped
+    // immediately, so ANY failure (duplicate/429, expired token/403,
+    // validation error, network error) permanently consumed the cooldown
+    // window — forcing the user to refresh the page (which resets this
+    // in-memory variable) just to retry a submission that never sent.
+    const _previousSubmitTime = _lastClientSubmit;
+    _lastClientSubmit = Date.now();
+    const elapsedMs   = Date.now() - _pageLoadTime;
+
+    const payload = {
+        full_name:      document.getElementById('fullName').value.trim(),
+        contact_number: document.getElementById('contactNumber').value.trim(),
+        email:          document.getElementById('email').value.trim(),
+        account_number: document.getElementById('accountNumber').value.trim() || null,
+        barangay:       document.getElementById('barangay').value.trim(),
+        town:           document.getElementById('town').value.trim(),
+        address:        document.getElementById('address').value.trim(),
+        latitude:       _lat,
+        longitude:      _lng,
+        accuracy:       _accuracy,
+        feeder_name:    _currentFeeder || null,
+        incident_type:  document.getElementById('incidentType').value,
+        affected_area:  document.getElementById('affectedArea').value,
+        incident_time:  document.getElementById('incidentTime').value,
+        duration:       document.getElementById('duration').value,
+        details:        document.getElementById('details').value.trim(),
+        landmark:       document.getElementById('landmark').value.trim(),
+        source:         'Web Form',
+        is_approximate_location: !_isPrecise,
+        photo_urls:     _photoUrls,
+        _client_priority: _currentPriority,   // ← ADD THIS
+        _hp_field:      document.getElementById('_hp_field')?.value || '',
+    };
+
+    function saveReportOffline() {
+    const { id: queuedId, queueLength } = queueOfflineReport(payload, elapsedMs);
+    _pendingOfflineQueueId = queuedId;
+    _submitted = true; _formDirty = false;
+    clearDraft();
+        document.getElementById('outageForm').style.display  = 'none';
+        document.getElementById('priorityBar').style.display = 'none';
+        document.getElementById('successDetail').innerHTML = `
+            <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;padding:16px;text-align:left;">
+                <div style="font-weight:700;color:#78350f;font-size:15px;margin-bottom:6px;">
+                    📡 No connection — your report has been saved
+                </div>
+                <p style="font-size:13px;color:#78350f;line-height:1.6;">
+                    It will send automatically once you're back online. ${queueLength} report${queueLength > 1 ? 's' : ''} waiting.
+                </p>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px;">
+                <a href="tel:+639989893028"
+                   style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+                          background:#991b1b;color:#fff;text-decoration:none;font-weight:700;
+                          padding:11px;border-radius:10px;font-size:13px;">
+                    📞 Call Hotline
+                </a>
+                <a href="${messengerLink('talk_to_agent')}" target="_blank" rel="noopener"
+                   style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+                          background:#1877F2;color:#fff;text-decoration:none;font-weight:700;
+                          padding:11px;border-radius:10px;font-size:13px;">
+                    💬 Chat with Agent
+                </a>
+            </div>`;
+        document.getElementById('successWrap').querySelector('h3').textContent = '💾 Report Saved Offline';
+        document.getElementById('successWrap').style.display = 'block';
+        document.getElementById('successWrap').scrollIntoView({ behavior:'smooth' });
+        srAnnounce('No connection. Your report has been saved and will send automatically when back online.');
+        btn.disabled = false; updatePriorityBar();
+        // Offline queueing counts as "handled" — keep the cooldown locked
+        // so the same payload isn't queued twice in rapid succession.
+    }
+
+    // Browser already knows it's offline — skip doomed network calls, queue immediately
+    if (!navigator.onLine) {
+        saveReportOffline();
+        return;
+    }
+
+    let token = await ensureFormToken();
+    if (!token) {
+        // Couldn't reach the server for a token — treat as connectivity failure, queue instead of hard error
+        saveReportOffline();
+        return;
+    }
+
+    async function attemptSubmit(tok) {
+        const res = await fetch('/api/submit_power_outage', {
+            method: 'POST',
+            headers: {
+                'Content-Type':  'application/json',
+                'X-Form-Token':  tok,
+                'X-Submit-Time': String(elapsedMs),
+            },
+            body: JSON.stringify(payload)
+        });
+        let resData = {};
+        try {
+            const resText = await res.text();
+            resData = resText ? JSON.parse(resText) : {};
+        } catch (_) { /* body not JSON */ }
+        return { res, resData };
+    }
+
+    try {
+        let { res, resData } = await attemptSubmit(token);
+
+        // ── Transparent token-expiry retry ───────────────────────────────
+        // A form can legitimately stay open far longer than the token's
+        // server-side TTL (consumer distracted, slow typing, spotty
+        // signal during an actual outage). Rather than forcing a page
+        // refresh — which loses their place mid-emergency-report — mint
+        // a fresh token and resubmit ONCE, silently, before bothering
+        // the user with anything.
+        if (!res.ok && res.status === 403 &&
+            ((resData.error_code === 'TOKEN_INVALID') ||
+             (resData.error || '').toLowerCase().includes('session') ||
+             (resData.error || '').toLowerCase().includes('token'))) {
+            _formToken = null;
+            token = await ensureFormToken(true);
+            if (token) {
+                ({ res, resData } = await attemptSubmit(token));
+            }
+        }
+
+        if (!res.ok) {
+            // ── FIX: this attempt never actually went through — release
+            // the cooldown so the user can correct the issue and retry
+            // immediately instead of being forced to refresh the page.
+            _lastClientSubmit = _previousSubmitTime;
+
+            const serverMsg = resData.error || `Server error ${res.status}`;
+            if (res.status === 429) {
+                const refId = resData.reference_id || null;
+                if (refId) {
+                    sessionStorage.setItem('ileco_last_ref', refId);
+                    showError(`⚠️ You already reported this issue and our team is responding.\n• Your reference number is: ${refId}\n• Quote this number for follow-up calls.\nFor fallen wire, fire, or electric shock call 09989893028.`);
+                } else {
+                    showError('⚠️ ' + serverMsg);
+                }
+            } else if (res.status === 403) {
+                // We already tried one silent token refresh + retry above.
+                // Landing here means it genuinely failed twice (e.g. token
+                // store unreachable), so a manual refresh is a real ask now.
+                showError('⚠️ Your session could not be verified.\n• Please refresh this page (press F5 or pull down on mobile).\n• Your form data has been saved as a draft.\n• If the problem continues, call 09989893028 directly.');
+                ensureFormToken(true);
+            } else {
+                showError(serverMsg + ' — please call 09989893028 to report directly.');
+                ensureFormToken(true);
+            }
+            btn.disabled = false; updatePriorityBar();
+            return;
+        }
+
+        if (resData.success) {
+            _submitted = true; _formDirty = false;
+            clearDraft();
+
+            const refId = resData.reference_id || (() => {
+                const town = document.getElementById('town').value || 'XX';
+                const code = {
+                    'Cabatuan':'CA','Alimodian':'AL','Guimbal':'GU','Igbaras':'IG',
+                    'Leganes':'LG','Leon':'LE','Maasin':'MA','Miag-ao':'MI',
+                    'Oton':'OT','Pavia':'PV','San Joaquin':'SJ','San Miguel':'SM',
+                    'Sta. Barbara':'SB','Tigbauan':'TG','Tubungan':'TU'
+                }[town] || town.substring(0,2).toUpperCase();
+                const d = new Date();
+                const yy = String(d.getFullYear()).slice(2);
+                const mm = String(d.getMonth()+1).padStart(2,'0');
+                const dd = String(d.getDate()).padStart(2,'0');
+                return `${code}${yy}${mm}${dd}${String(Math.floor(Math.random()*9000)+1000)}`;
+            })();
+            const isFollowup = resData.is_followup === true;
+
+            buildAndShowSuccessUI(refId, payload, _currentPriority, resData.feeder_name, isFollowup);
+        }
+
+    } catch (err) {
+        // Network dropped mid-request — save locally, auto-retry later
+        saveReportOffline();
+    }
+
+});
+
+
+// ═══════════════════════════════════════════════════════════════
+// COPY REF ID
+// ═══════════════════════════════════════════════════════════════
+function copyRef(refId) {
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(refId).then(() => showToast('Reference number copied!', 'success'));
+    } else {
+        const el = document.createElement('textarea');
+        el.value = refId; document.body.appendChild(el); el.select();
+        document.execCommand('copy'); document.body.removeChild(el);
+        showToast('Reference number copied!', 'success');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+updatePriorityBar();
+updateProgress();
+loadDraft();
+flushOfflineQueue();
+
+function resetFormSmoothly() {
+    _pendingOfflineQueueId = null;   // ← FIX: correct variable name
+    document.getElementById('successWrap').style.display = 'none';
+    document.getElementById('outageForm').style.display  = 'block';
+    document.getElementById('priorityBar').style.display = 'none';
+    document.getElementById('errorMsg').style.display    = 'none';
+    _photoUrls.length = 0;
+    document.getElementById('photoPreviews').innerHTML = '';
+    document.getElementById('photoStatus').textContent = '';
+
+    document.getElementById('outageForm').reset();
+    updateCounter(); updateProgress(); updatePriorityBar();
+
+    _lat = null; _lng = null; _accuracy = null;
+    _isPrecise = false; _currentFeeder = null; _userEditedAddress = false;
+
+    if (_marker)      { _map.removeLayer(_marker);      _marker      = null; }
+    if (_circle)      { _map.removeLayer(_circle);      _circle      = null; }
+    if (_centroidDot) { _map.removeLayer(_centroidDot); _centroidDot = null; }
+
+    document.getElementById('coordInfo').className   = 'coord-info';
+    document.getElementById('coordInfo').innerHTML   = '📍 Click the map or use GPS to mark your exact location';
+    document.getElementById('feederInfo').style.display = 'none';
+    document.getElementById('outageStatusStrip').className = 'outage-status-strip';
+    document.getElementById('centroidWarn').classList.remove('show');
+    document.getElementById('mapFallback').classList.remove('show');
+
+    const gpsBtn = document.getElementById('gpsBtn');
+    gpsBtn.disabled    = false;
+    gpsBtn.textContent = '📡 Use My Current GPS Location';
+
+    document.getElementById('consentCheck').checked = false;
+    clearConsentError();
+
+    document.getElementById('incidentTime').value = new Date().toTimeString().slice(0,5);
+    document.getElementById('timeWarning').style.display = 'none';
+    document.getElementById('incidentGuidance').style.display = 'none';
+    document.getElementById('accountConfirm').innerHTML = '';
+    document.getElementById('accountConfirm').classList.remove('show');
+
+    sessionStorage.removeItem('ileco_last_ref');
+    document.getElementById('dupBanner').style.display = 'none';
+
+    clearDraft();
+    _formDirty = false; _submitted = false; _lastClientSubmit = 0;
+
+    if (window._map) {
+        _map.setView([10.7115, 122.4240], 11);
+        setTimeout(() => _map.invalidateSize(), 200);
+    }
+
+    document.querySelector('.header').scrollIntoView({ behavior: 'smooth' });
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled  = false;
+    btn.innerHTML = '⚡ Send Emergency Report';
+
+    _formToken = null;
+    _doFetchToken().then(t => { if (t) { _formToken = t; _formTokenIssuedAt = Date.now(); } });
+}
+</script>
+</body>
+</html>
