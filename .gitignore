@@ -39,3 +39,5 @@ htmlcov/
 .env.*
 .env
 .env.*
+dashboard-transfer.tar.gz
+dashboard-transfer.tar.gz
