@@ -711,6 +711,8 @@
 .action-menu-item.assign   { color:#b45309; }
 .action-menu-item.restored { color:#047857; }
 .action-menu-item.remove   { color:#b91c1c; }
+.leaflet-popup { pointer-events: auto; }
+.leaflet-popup-content-wrapper { cursor: default; }
     </style>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -1619,19 +1621,18 @@ function initializeWebSocket(){
     socket.on('incident_updated',()=>debouncedRefresh());
     socket.on('incident_removed',()=>debouncedRefresh());
     socket.on('stats_update',()=>{ fetch('/api/dashboard_stats',{credentials:'same-origin'}).then(r=>r.json()).then(d=>{if(d.success)updateStats(d.stats);}).catch(()=>{}); });
-    socket.on('incident_followup', (d) => {
-        const rows = document.querySelectorAll('#incidentTableBody tr');
-        rows.forEach(row => {
-            if (row.dataset.incidentId && parseInt(row.dataset.incidentId) === d.incident_id) {
-                const cells = row.querySelectorAll('td');
-                if (cells[3]) {
-                    cells[3].innerHTML = `<strong>${d.report_count}</strong>`;
-                    cells[3].style.transition = 'background 0.3s';
-                    cells[3].style.background = '#d1fae5';
-                    setTimeout(() => { cells[3].style.background = ''; }, 2500);
-                }
+        socket.on('incident_followup', (d) => {
+        const row = document.querySelector(
+            '#incidentTableBody tr[data-incident-id="' + d.incident_id + '"]');
+        if (row) {
+            const affectedCell = row.querySelectorAll('td')[4];   // 0 Location, 1 Feeder, 2 Category, 3 Sub-types, 4 Affected
+            if (affectedCell) {
+                affectedCell.innerHTML = '<strong>' + d.report_count + '</strong>';
+                affectedCell.style.transition = 'background 0.3s';
+                affectedCell.style.background = '#d1fae5';
+                setTimeout(() => { affectedCell.style.background = ''; }, 2500);
             }
-        });
+        }
         showNotification(`⚠️ Follow-up from ${d.barangay}, ${d.town} — ${d.message}`, 'info');
         debouncedRefresh();
     });
@@ -1803,7 +1804,7 @@ function _renderIncidentRows(incidents) {
         // ── TIME DISPLAY ─────────────────────────────────
         var OUTAGE_INCIDENT_TYPES = ['power_outage', 'sdi_problem', 'voltage_issue', 'partial_outage', 'streetlight'];
         var HAZARD_TYPES = ['fallen_wire', 'leaning_pole', 'tree_branch', 'transformer_issue',
-                            'fire_hazard', 'sparking', 'equipment_damage', 'other'];
+                    'fire_hazard', 'sparking', 'equipment_damage', 'vehicular_accident', 'other'];
         var isOutageType = OUTAGE_INCIDENT_TYPES.includes(inc.type || '');
         var isHazardType = HAZARD_TYPES.includes(inc.type || '');
         var formattedTime = 'N/A', timeLabel = 'Reported';
@@ -1944,24 +1945,24 @@ const CLUSTER_GROUP_META = {
 };
 
 const TYPE_TO_CLUSTER_GROUP = {
-    power_outage:      'POWER',
-    partial_outage:    'POWER',
-    sdi_problem:       'POWER',
-    voltage_issue:     'POWER',
+    power_outage:        'POWER',
+    partial_outage:      'POWER',
+    sdi_problem:         'POWER',
+    voltage_issue:       'POWER',
 
-    fallen_wire:       'SAFETY',
-    transformer_issue: 'SAFETY',
-    fire_hazard:       'SAFETY',
-    sparking:          'SAFETY',
-    tree_branch:       'SAFETY',
-    vehicular_accident:'SAFETY',
-    other:             'SAFETY',
+    fallen_wire:         'SAFETY',
+    transformer_issue:   'SAFETY',
+    fire_hazard:         'SAFETY',
+    sparking:            'SAFETY',
+    vehicular_accident:  'SAFETY',
+    other:               'SAFETY',
 
-    leaning_pole:      'ASSET',
-    equipment_damage:  'ASSET',
-    vegetation_clearing:'ASSET',
+    tree_branch:         'ASSET',   // was SAFETY, server maps AI → ASSET
+    leaning_pole:        'ASSET',
+    equipment_damage:    'ASSET',
+    vegetation_clearing: 'ASSET',
 
-    streetlight:       'LIGHT',
+    streetlight:         'LIGHT',
 };
 
 function getClusterGroup(inc) {
@@ -2269,7 +2270,62 @@ function exportConsumersCSV() {
     _downloadCSV([header, ...rows], `ileco1_${incLabel}_${ts}.csv`);
 }
 
+/* ═══════════════════════════════════════════════════
+   HOVER POPUP — opens on mouseover, stays open while the
+   cursor is over the marker OR the popup (so buttons are
+   clickable), closes shortly after the cursor leaves.
+   Click also opens (for touch screens).
+═══════════════════════════════════════════════════ */
+function bindHoverPopup(marker, html, maxWidth){
+    var popup = L.popup({
+        maxWidth: maxWidth || 320,
+        autoPan: false,          // no map jumping while hovering
+        closeButton: false,
+        offset: [0, -6]
+    }).setContent(html);
 
+    marker.bindPopup(popup);
+    // Remove Leaflet's default click-TOGGLE (it would close the hover popup on click)
+    marker.off('click', marker._openPopup, marker);
+
+    var timer = null;
+    function open(){ clearTimeout(timer); if (!marker.isPopupOpen()) marker.openPopup(); }
+    function closeSoon(){ clearTimeout(timer); timer = setTimeout(function(){ marker.closePopup(); }, 250); }
+
+    marker.on('mouseover', open);
+    marker.on('mouseout',  closeSoon);
+    marker.on('click',     open);
+    marker.on('dragstart', function(){ clearTimeout(timer); marker.closePopup(); });
+
+    marker.on('popupopen', function(e){
+        var el = e.popup.getElement();
+        if (!el || el._hoverBound) return;
+        el._hoverBound = true;
+        el.addEventListener('mouseenter', function(){ clearTimeout(timer); });
+        el.addEventListener('mouseleave', closeSoon);
+    });
+}
+
+/* Reports belonging to a cluster, shown inside the hover popup */
+function _clusterReportsHtml(inc){
+    var list = (currentConsumerReports || []).filter(function(r){ return r.incident_id === inc.incident_id; });
+    if (!list.length) return '';
+    var MAX = 5;
+    var rows = list.slice(0, MAX).map(function(r){
+        return '<div style="padding:5px 0;border-bottom:1px solid #f3f4f6;font-size:12px;line-height:1.4;">'
+            + '<strong>' + esc(r.customer || 'N/A') + '</strong>'
+            + ' <span style="color:#6b7280;">· ' + esc(r.contact || '') + '</span><br>'
+            + '<span style="color:#6b7280;">' + esc((r.incident_type || '').replace(/_/g,' '))
+            + ' · ' + esc(r.status || '')
+            + ' · ' + (r.timestamp ? formatDateTime(r.timestamp) : 'N/A') + '</span>'
+            + '</div>';
+    }).join('');
+    var more = list.length > MAX
+        ? '<div style="font-size:11px;color:#2563eb;font-weight:700;padding-top:4px;">+' + (list.length - MAX) + ' more — click marker for all</div>'
+        : '';
+    return '<div class="popup-field"><strong>👥 Reports (' + list.length + '):</strong>'
+        + '<div style="margin-top:4px;max-height:150px;overflow-y:auto;">' + rows + '</div>' + more + '</div>';
+}
 function renderMap(filteredIncidents){
     if (singleMarkerMode) return; // ← ADD: preserve the isolated single-consumer marker
     incidentMarkers.clearLayers(); consumerMarkers.clearLayers();
@@ -2284,7 +2340,8 @@ function renderMap(filteredIncidents){
             var sev=getSeverityLevel(inc.priority,inc.report_count,inc.status), cls=sev.toLowerCase();
             var size=Math.min(32+Math.sqrt(inc.report_count||1)*8,120), fs=Math.max(13,Math.round(size/3.2));
             var icon=L.divIcon({html:'<div class="incident-cluster '+cls+'" style="width:'+size+'px;height:'+size+'px;font-size:'+fs+'px;line-height:'+size+'px;">'+(inc.report_count||0)+'</div>',className:'no-default',iconSize:[size,size],iconAnchor:[size/2,size/2]});
-            var m=L.marker([inc.lat,inc.lng],{icon,draggable:true}).bindPopup(createIncidentPopup(inc), {maxWidth:320, autoPan:true, autoPanPadding:[40,40]});
+            var m=L.marker([inc.lat,inc.lng],{icon,draggable:true});
+            bindHoverPopup(m, createIncidentPopup(inc), 320);
             m.on('click',()=>showConsumerDetails(inc));
             m.on('dragend', function(ev){ var ll=ev.target.getLatLng(); saveIncidentPosition(inc.incident_id, ll.lat, ll.lng); });
             incidentMarkers.addLayer(m);
@@ -2299,8 +2356,8 @@ function renderMap(filteredIncidents){
             if(r.lat==null||r.lng==null)return;
             var cls=r.status==='RESTORED'?'restored':r.priority==='CRITICAL'?'severe':r.priority==='HIGH'?'moderate':'minor';
             var icon=L.divIcon({html:'<div class="consumer-marker '+cls+'"></div>',className:'no-default',iconSize:[14,14],iconAnchor:[7,7]});
-            var marker=L.marker([r.lat,r.lng],{icon,draggable:true})
-                .bindPopup(createConsumerPopup(r), {maxWidth:300, autoPan:true, autoPanPadding:[40,40]});
+            var marker=L.marker([r.lat,r.lng],{icon,draggable:true});
+                bindHoverPopup(marker, createConsumerPopup(r), 300);
 
             marker.on('dragend', function(ev){
                 var ll=ev.target.getLatLng();
@@ -2339,6 +2396,7 @@ function createIncidentPopup(inc){
         + '<div class="popup-field"><strong>Status:</strong> <span class="status-badge '+( inc.status||'').toLowerCase()+'">'+( inc.status||'N/A')+'</span></div>'
         + '<div class="popup-field"><strong>Sub-types:</strong> '+chipsHtml+'</div>'
         + '<div class="popup-field"><strong>⏰ Reported:</strong> '+timeStr+'</div>'
+        + _clusterReportsHtml(inc)
         + btns+'</div></div>';
 }
 
@@ -2745,6 +2803,108 @@ function showConsumerDetailsModal(c) {
         + '</div>';
 
     document.getElementById('incidentModal').classList.add('show');
+}
+
+function isVideoUrl(u) { return /\.(mp4|mov|webm)(\?|#|$)/i.test(String(u || '')); }
+
+function buildPhotoThumbStrip(photoUrls) {
+    if (!photoUrls || !photoUrls.length) return '';
+    const MAX_SHOW = 2;
+    const urlsJson = JSON.stringify(photoUrls).replace(/"/g, '&quot;');
+    let html = '<div class="photo-thumb-strip" onclick="event.stopPropagation()">';
+    photoUrls.slice(0, MAX_SHOW).forEach(function(url, idx) {
+        if (isVideoUrl(url)) {
+            html += `<div style="position:relative;width:44px;height:44px;flex-shrink:0;cursor:zoom-in;"
+                          onclick="openLightbox(${urlsJson}, ${idx})">
+                        <video class="photo-thumb" src="${esc(url)}#t=0.1" preload="metadata" muted playsinline
+                               style="pointer-events:none;"></video>
+                        <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                                     font-size:16px;text-shadow:0 1px 4px rgba(0,0,0,.8);pointer-events:none;">▶️</span>
+                     </div>`;
+        } else {
+            html += `<img class="photo-thumb" src="${esc(url)}" alt="Photo ${idx+1}"
+                          loading="lazy" decoding="async"
+                          onclick="openLightbox(${urlsJson}, ${idx})"
+                          onerror="this.style.display='none'">`;
+        }
+    });
+    if (photoUrls.length > MAX_SHOW) {
+        html += `<div class="photo-more-badge" onclick="openLightbox(${urlsJson}, 0)">+${photoUrls.length - MAX_SHOW}</div>`;
+    }
+    return html + '</div>';
+}
+
+function buildModalPhotoGallery(photoUrls) {
+    if (!photoUrls || !photoUrls.length) return '';
+    const urlsJson = JSON.stringify(photoUrls).replace(/"/g, '&quot;');
+    let html = '<div style="margin-bottom:20px;">'
+             + '<h3 style="color:#1e40af;margin-bottom:10px;font-size:16px;">📷 Attached Photos / Videos</h3>'
+             + '<div class="modal-photo-gallery">';
+    photoUrls.forEach(function(url, idx) {
+        if (isVideoUrl(url)) {
+            html += `<div style="position:relative;width:100px;height:100px;cursor:zoom-in;"
+                          onclick="openLightbox(${urlsJson}, ${idx})">
+                        <video class="modal-photo-thumb" src="${esc(url)}#t=0.1" preload="metadata" muted playsinline
+                               style="pointer-events:none;"></video>
+                        <span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                                     font-size:26px;text-shadow:0 1px 4px rgba(0,0,0,.8);pointer-events:none;">▶️</span>
+                     </div>`;
+        } else {
+            html += `<img class="modal-photo-thumb" src="${esc(url)}" alt="Photo ${idx+1}"
+                          loading="lazy" decoding="async"
+                          onclick="openLightbox(${urlsJson}, ${idx})"
+                          onerror="this.style.display='none'">`;
+        }
+    });
+    return html + '</div></div>';
+}
+
+function _renderLightbox() {
+    const old = document.getElementById('_lightboxOverlay');
+    if (old) old.remove();
+    if (!_lbUrls.length) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = '_lightboxOverlay';
+    overlay.className = 'lightbox-overlay';
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) closeLightbox(); });
+
+    const url = _lbUrls[_lbIdx];
+    let media;
+    if (isVideoUrl(url)) {
+        media = document.createElement('video');
+        media.src = url; media.controls = true; media.autoplay = true; media.playsInline = true;
+    } else {
+        media = document.createElement('img');
+        media.src = url; media.alt = 'Photo ' + (_lbIdx + 1);
+    }
+    media.className = 'lightbox-img';
+    media.onclick = function(e) { e.stopPropagation(); };
+
+    const counter = document.createElement('div');
+    counter.className = 'lightbox-counter';
+    counter.textContent = (_lbIdx + 1) + ' / ' + _lbUrls.length;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'lightbox-close';
+    closeBtn.innerHTML = '✕';
+    closeBtn.onclick = closeLightbox;
+
+    overlay.appendChild(closeBtn);
+    overlay.appendChild(media);
+    overlay.appendChild(counter);
+
+    if (_lbUrls.length > 1) {
+        const prev = document.createElement('button');
+        prev.className = 'lightbox-nav prev'; prev.innerHTML = '‹';
+        prev.onclick = function(e) { e.stopPropagation(); _lbIdx = (_lbIdx - 1 + _lbUrls.length) % _lbUrls.length; _renderLightbox(); };
+        const next = document.createElement('button');
+        next.className = 'lightbox-nav next'; next.innerHTML = '›';
+        next.onclick = function(e) { e.stopPropagation(); _lbIdx = (_lbIdx + 1) % _lbUrls.length; _renderLightbox(); };
+        overlay.appendChild(prev);
+        overlay.appendChild(next);
+    }
+    document.body.appendChild(overlay);
 }
 
 function closeModal(){ document.getElementById('incidentModal').classList.remove('show'); }

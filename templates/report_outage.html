@@ -7,29 +7,13 @@
     <meta name="description" content="Report power outages and electrical hazards to ILECO-1 for rapid response.">
     <meta name="robots" content="noindex, nofollow">
 
-    <link rel="preconnect" href="https://unpkg.com" crossorigin>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="dns-prefetch" href="https://unpkg.com">
-    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
-
     <link rel="preload" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" as="style" crossorigin="">
     <link rel="preload" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" as="script" crossorigin="">
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" as="style">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" as="style">
 
-    <!-- Non-blocking CSS: page paints immediately, styles apply once fetched.
-         This is the fix for the slow open inside Facebook Messenger's WebView —
-         previously these two <link rel="stylesheet"> tags were render-blocking,
-         and Messenger's in-app browser is much slower to open new cross-origin
-         connections than a normal mobile browser. -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print" onload="this.media='all'">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" media="print" onload="this.media='all'">
-    <noscript>
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
-    </noscript>
-
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 
     <style>
         :root {
@@ -52,14 +36,13 @@
             --gray-100: #f3f4f6;
             --gray-50:  #f9fafb;
             --white:    #ffffff;
-            --radius-sm:  10px;
-            --radius-md: 14px;
-            --radius-lg: 20px;
-            --radius-xl: 28px;
-            --shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 1px rgba(15,23,42,.03);
-            --shadow-md: 0 6px 24px rgba(15,23,42,.06);
-            --shadow-lg: 0 24px 60px rgba(15,23,42,.10);
-            --hairline: rgba(15,23,42,.08);
+            --radius-sm:  8px;
+            --radius-md: 12px;
+            --radius-lg: 18px;
+            --radius-xl: 24px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+            --shadow-md: 0 4px 16px rgba(0,0,0,.10);
+            --shadow-lg: 0 10px 40px rgba(0,0,0,.14);
             --font: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             --transition: 0.22s cubic-bezier(.4,0,.2,1);
         }
@@ -67,10 +50,10 @@
         *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
         body {
             font-family: var(--font);
-            background: #f5f5f7;
+            background: linear-gradient(135deg, #eef2ff 0%, #e8ecf1 100%);
             color: var(--gray-900);
             min-height: 100vh;
-            padding: 24px 16px;
+            padding: 16px;
             line-height: 1.6;
         }
 
@@ -114,15 +97,14 @@
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
 
         .container {
-            max-width: 960px; margin: 24px auto;
+            max-width: 960px; margin: 20px auto;
             background: var(--white); border-radius: var(--radius-xl);
-            box-shadow: var(--shadow-lg); overflow: hidden;
-            border: 1px solid rgba(15,23,42,.04);
+            box-shadow: var(--shadow-lg); overflow: clip;
         }
 
         .header {
             background: linear-gradient(135deg, var(--blue-900) 0%, var(--blue-700) 60%, var(--blue-500) 100%);
-            color: #fff; padding: 44px 40px 36px; text-align: center;
+            color: #fff; padding: 32px 36px; text-align: center;
             position: relative; overflow: hidden;
         }
         .header::after {
@@ -140,22 +122,20 @@
             margin-top:12px; position:relative; z-index:1;
         }
 
-        .form-body { padding: 40px 40px 32px; }
-        @media(max-width:600px){ .form-body{ padding:28px 20px; } }
+        .form-body { padding: 32px 36px; overflow: visible; }
+        @media(max-width:600px){ .form-body{ padding:20px 16px; } }
 
         .progress-wrap { display:flex; gap:8px; align-items:center; margin-bottom:28px; }
-        .progress-step { flex:1; height:3px; border-radius:3px; background:var(--hairline); transition: background var(--transition); }
+        .progress-step { flex:1; height:4px; border-radius:4px; background:var(--gray-300); transition: background var(--transition); }
         .progress-step.active { background: var(--blue-500); }
         .progress-step.done   { background: var(--green-600); }
         .progress-label { font-size:12px; font-weight:600; color:var(--gray-500); white-space:nowrap; }
 
         .hotline-card {
             display:flex; align-items:flex-start; gap:14px;
-            background:#fff7f7;
-            border:1px solid rgba(220,38,38,.12);
-            border-left:3px solid var(--red-500);
-            border-radius:var(--radius-md); padding:18px 20px; margin-bottom:20px;
-            box-shadow: var(--shadow-sm);
+            background:linear-gradient(135deg,#fff1f2,#ffe4e6);
+            border-left:4px solid var(--red-500);
+            border-radius:var(--radius-md); padding:16px 18px; margin-bottom:20px;
         }
         .hotline-card .hl-icon { font-size:26px; flex-shrink:0; }
         .hotline-card .hl-title { font-weight:700; color:var(--red-700); font-size:15px; }
@@ -177,10 +157,9 @@
         .priority-info li { margin:4px 0; }
 
         .privacy-card {
-            background: #f5f9ff; border: 1px solid rgba(37,99,235,.12);
+            background: #f0f9ff; border: 1px solid #bae6fd;
             border-radius: var(--radius-md); padding: 18px 20px;
             margin-bottom: 24px; font-size: 13px; line-height: 1.7; color: #075985;
-            box-shadow: var(--shadow-sm);
             transition: border-color 0.2s ease, background-color 0.2s ease;
         }
         .privacy-card h4 { font-size:14px; font-weight:700; color:#0369a1; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
@@ -244,20 +223,19 @@
         #consentError { display: none !important; }
 
         .false-report-warn {
-            background:#fffdf5; border:1px solid rgba(245,158,11,.18);
+            background:#fef3c7; border:1px solid #fcd34d;
             border-radius:var(--radius-md); padding:12px 16px;
             margin-bottom:20px; font-size:13px; color:#78350f; line-height:1.6;
-            box-shadow: var(--shadow-sm);
         }
         .false-report-warn strong { color:#92400e; }
 
         .divider { height:1px; background:linear-gradient(90deg,transparent,var(--gray-300),transparent); margin:28px 0; }
         .section-label {
-            font-size:12px; font-weight:600; letter-spacing:.06em;
+            font-size:11px; font-weight:700; letter-spacing:.08em;
             text-transform:uppercase; color:var(--gray-500);
-            margin-bottom:18px; display:flex; align-items:center; gap:8px;
+            margin-bottom:16px; display:flex; align-items:center; gap:8px;
         }
-        .section-label::after { content:''; flex:1; height:1px; background:var(--hairline); }
+        .section-label::after { content:''; flex:1; height:1px; background:var(--gray-300); }
 
         .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px; }
         @media(max-width:640px){ .form-grid{ grid-template-columns:1fr; } }
@@ -269,16 +247,16 @@
         label .opt { font-weight:400; color:var(--gray-500); font-size:11px; margin-left:2px; }
 
         input, textarea, select {
-            width:100%; padding:13px 14px;
-            border:1px solid var(--hairline); border-radius:var(--radius-sm);
+            width:100%; padding:11px 13px;
+            border:2px solid var(--gray-300); border-radius:var(--radius-sm);
             font-size:14px; font-family:var(--font); color:var(--gray-900);
-            background:#fbfbfd; transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+            background:var(--white); transition: border-color var(--transition), box-shadow var(--transition);
             -webkit-appearance:none; appearance:none;
         }
         @supports (-webkit-touch-callout: none) { input, textarea, select { font-size: 16px !important; } }
-        input:focus, textarea:focus, select:focus { outline:none; border-color:var(--blue-500); background:var(--white); box-shadow:0 0 0 4px rgba(37,99,235,.10); }
-        input.invalid, textarea.invalid, select.invalid { border-color:var(--red-500); background:#fff8f8; }
-        input.valid, textarea.valid, select.valid { border-color:var(--green-600); background:#f7fdfa; }
+        input:focus, textarea:focus, select:focus { outline:none; border-color:var(--blue-500); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+        input.invalid, textarea.invalid, select.invalid { border-color:var(--red-500); background:#fef2f2; }
+        input.valid, textarea.valid, select.valid { border-color:var(--green-600); background:#f0fdf4; }
         textarea { resize:vertical; min-height:110px; }
         select { cursor:pointer; }
 
@@ -288,9 +266,10 @@
         .field-hint { font-size:11px; color:var(--gray-500); margin-top:4px; line-height:1.4; }
         .field-error { font-size:12px; color:var(--red-500); font-weight:500; margin-top:4px; min-height:18px; display:block; }
         .char-counter { font-size:11px; text-align:right; margin-top:4px; font-weight:500; transition:color var(--transition); }
-        .char-counter.ok     { color:var(--green-600); }
-        .char-counter.warn   { color:var(--amber-500); }
-        .char-counter.danger { color:var(--red-500); }
+        .char-counter.neutral { color:var(--gray-500); }
+.char-counter.ok      { color:var(--green-600); }
+.char-counter.warn    { color:var(--amber-500); }
+.char-counter.danger  { color:var(--red-500); }
 
         .draft-badge {
             display:none; align-items:center; gap:5px;
@@ -333,12 +312,12 @@
         @keyframes fadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
 
         .location-wrap { border:1px solid var(--gray-300); border-radius:var(--radius-md); padding:18px; background:var(--gray-50); }
-        #map { height:360px; border-radius:var(--radius-md); margin:14px 0 12px; border:1px solid var(--hairline); position:relative; }
+        #map { height:360px; border-radius:var(--radius-md); margin:14px 0 12px; border:2px solid var(--gray-300); position:relative; }
         @media(max-width:480px){ #map{ height:240px; } }
         .map-container { position:relative; }
         .map-controls { position:absolute; top:10px; left:10px; z-index:1000; display:flex; flex-direction:column; gap:6px; }
         .map-ctrl-btn {
-            background:var(--white); border:1px solid var(--hairline);
+            background:var(--white); border:2px solid rgba(0,0,0,.18);
             border-radius:var(--radius-sm); width:42px; height:42px;
             display:flex; align-items:center; justify-content:center;
             cursor:pointer; font-size:18px; box-shadow:var(--shadow-sm);
@@ -366,11 +345,11 @@
         .centroid-warn .cw-text small { display:block; margin-top:3px; font-size:11px; color:#92400e; }
 
         #feederInfo { display:none; margin-top:12px; }
-        .feeder-card { border-radius:var(--radius-md); padding:14px 16px; display:flex; align-items:flex-start; gap:12px; animation: fadeUp .35s ease; box-shadow: var(--shadow-sm); }
-        .feeder-card.inside   { background:#f8f6ff; border:1px solid #ddd4fb; }
-        .feeder-card.nearest  { background:#f0fdff; border:1px solid #b8ecf5; }
-        .feeder-card.outside  { background:var(--gray-50); border:1px solid var(--hairline); }
-        .feeder-card.checking { background:var(--gray-50); border:1px dashed var(--hairline); }
+        .feeder-card { border-radius:var(--radius-md); padding:14px 16px; display:flex; align-items:flex-start; gap:12px; animation: fadeUp .35s ease; }
+        .feeder-card.inside   { background:linear-gradient(135deg,#f5f3ff,#ede9fe); border:2px solid #c4b5fd; }
+        .feeder-card.nearest  { background:linear-gradient(135deg,#ecfeff,#cffafe); border:2px solid #67e8f9; }
+        .feeder-card.outside  { background:var(--gray-50); border:2px solid var(--gray-300); }
+        .feeder-card.checking { background:var(--gray-50); border:2px dashed var(--gray-300); }
         .feeder-icon { font-size:26px; flex-shrink:0; }
         .feeder-body { flex:1; min-width:0; }
         .feeder-lbl  { font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; margin-bottom:3px; }
@@ -396,7 +375,6 @@
             border:none; border-radius:var(--radius-sm);
             font-size:14px; font-weight:600; font-family:var(--font);
             cursor:pointer; margin-top:12px;
-            box-shadow: var(--shadow-sm);
             transition: all var(--transition);
             display:flex; align-items:center; justify-content:center; gap:8px;
         }
@@ -406,31 +384,29 @@
         .priority-bar {
             border-radius:var(--radius-md); padding:14px 18px; margin:20px 0;
             display:none; align-items:center; gap:12px; font-weight:600; font-size:15px;
-            box-shadow: var(--shadow-sm);
         }
         .priority-bar.show { display:flex; }
-        .priority-bar.critical { background:#fef1f1; color:#991b1b; border:1px solid #f7bcbc; animation:pulseCritical 1.6s infinite; }
-        .priority-bar.high     { background:#fef3e8; color:#9a3412; border:1px solid #f6c99a; }
-        .priority-bar.medium   { background:#f8f3ff; color:#4c1d95; border:1px solid #d9c2fb; }
+        .priority-bar.critical { background:linear-gradient(135deg,#fee2e2,#fecaca); color:#991b1b; border:2px solid var(--red-500); animation:pulseCritical 1.6s infinite; }
+        .priority-bar.high     { background:linear-gradient(135deg,#fed7aa,#fdba74); color:#9a3412; border:2px solid #ea580c; }
+        .priority-bar.medium   { background:linear-gradient(135deg,#f3e8ff,#e9d5ff); color:#4c1d95; border:2px solid #8b5cf6; }
         @keyframes pulseCritical { 0%,100%{box-shadow:0 4px 12px rgba(220,38,38,.25)} 50%{box-shadow:0 8px 24px rgba(220,38,38,.45)} }
         .priority-icon { font-size:26px; }
 
         .dup-banner {
             display:none; padding:16px 20px; margin-bottom:20px;
-            background:#fffdf5; border:1px solid rgba(245,158,11,.18);
+            background:var(--amber-100); border:1px solid var(--amber-500);
             border-radius:var(--radius-md); font-size:14px; color:#78350f;
-            box-shadow: var(--shadow-sm);
         }
         .dup-banner a { color:#991b1b; font-weight:700; }
         .dup-banner button { margin-top:10px; background:none; border:1px solid #92400e; border-radius:var(--radius-sm); padding:5px 14px; color:#92400e; cursor:pointer; font-size:12px; font-family:var(--font); }
 
-        .messenger-warn { display:none; background:#fffdf5; border:1px solid rgba(245,158,11,.18); border-radius:var(--radius-md); padding:13px 16px; margin-bottom:18px; font-size:13px; line-height:1.65; color:#78350f; box-shadow: var(--shadow-sm); }
+        .messenger-warn { display:none; background:var(--amber-100); border:1px solid var(--amber-500); border-radius:var(--radius-md); padding:13px 16px; margin-bottom:18px; font-size:13px; line-height:1.65; color:#78350f; }
         .messenger-warn.show { display:block; }
 
         .map-fallback { display:none; margin-top:10px; padding:10px 14px; background:var(--amber-100); border:1px solid var(--amber-500); border-radius:var(--radius-sm); font-size:13px; color:#78350f; }
         .map-fallback.show { display:block; }
 
-        .layer-ctrl { position:absolute; top:10px; right:10px; z-index:1000; background:var(--white); border:1px solid var(--hairline); border-radius:var(--radius-sm); box-shadow:var(--shadow-sm); }
+        .layer-ctrl { position:absolute; top:10px; right:10px; z-index:1000; background:var(--white); border-radius:var(--radius-sm); box-shadow:var(--shadow-sm); }
         .layer-btn { background:var(--white); border:none; padding:8px 12px; border-radius:var(--radius-sm); cursor:pointer; display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--gray-700); font-family:var(--font); }
         .layer-dropdown { position:absolute; top:44px; right:0; background:var(--white); border-radius:var(--radius-sm); box-shadow:var(--shadow-md); padding:4px; min-width:150px; display:none; }
         .layer-dropdown.open { display:block; }
@@ -441,16 +417,16 @@
         .layer-opt.active .layer-check { display:block; }
 
         .btn-submit {
-            width:100%; padding:16px;
-            background:var(--blue-500);
+            width:100%; padding:15px;
+            background:linear-gradient(135deg,var(--blue-500),#1e40af);
             color:#fff; border:none; border-radius:var(--radius-md);
             font-size:16px; font-weight:700; font-family:var(--font);
             cursor:pointer; margin-top:4px;
-            box-shadow:var(--shadow-sm);
+            box-shadow:0 4px 14px rgba(37,99,235,.35);
             transition: all var(--transition);
             display:flex; align-items:center; justify-content:center; gap:8px;
         }
-        .btn-submit:hover { background:var(--blue-700); transform:translateY(-1px); box-shadow:var(--shadow-md); }
+        .btn-submit:hover { transform:translateY(-2px); box-shadow:0 8px 22px rgba(37,99,235,.45); }
         .btn-submit:disabled { background:#9ca3af; cursor:not-allowed; transform:none; box-shadow:none; }
 
         .success-wrap { display:none; padding:32px; background:linear-gradient(135deg,#d1fae5,#a7f3d0); border-radius:var(--radius-md); text-align:center; }
@@ -465,15 +441,15 @@
 
         .error-msg { background:var(--red-100); color:#991b1b; padding:13px 16px; border-radius:var(--radius-sm); border-left:4px solid var(--red-500); display:none; font-size:14px; font-weight:500; margin-bottom:18px; }
 
-       .toast { position:fixed; top:-100px; right:20px; background:var(--white); padding:10px 14px; border-radius:10px; box-shadow:0 3px 14px rgba(0,0,0,.14); z-index:10000; min-width:220px; max-width:320px; transition:top .3s ease; }
+        .toast { position:fixed; top:-100px; right:20px; background:var(--white); padding:13px 18px; border-radius:var(--radius-md); box-shadow:0 4px 20px rgba(0,0,0,.16); z-index:10000; min-width:270px; max-width:400px; transition:top .3s ease; }
         .toast.show { top:76px; }
-        .toast-inner { display:flex; align-items:center; gap:8px; font-size:13px; line-height:1.4; }
+        .toast-inner { display:flex; align-items:center; gap:10px; font-size:14px; }
         .toast.toast-error  { border-left:4px solid var(--red-500); }
         .toast.toast-success{ border-left:4px solid var(--green-600); }
         .toast.toast-info   { border-left:4px solid var(--blue-500); }
         @media(max-width:480px){ .toast{ right:10px; left:10px; min-width:auto; } }
 
-        .additional-block { background:#fbfbfd; border:1px solid var(--hairline); border-radius:var(--radius-md); padding:24px; }
+        .additional-block { background:var(--gray-50); border:2px dashed var(--gray-300); border-radius:var(--radius-md); padding:20px; }
         .additional-block h3 { font-size:15px; font-weight:700; color:var(--gray-700); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
 
         .map-container.fullscreen {
@@ -519,18 +495,61 @@
             display: flex;
             background: var(--green-100); border: 1px solid #6ee7b7; color: #065f46;
         }
+              /* ── LANGUAGE SWITCHER ── */
+        .lang-switcher {
+            display: flex; align-items: center; justify-content: center;
+            gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+            position: relative; z-index: 2;
+        }
+        .lang-switcher-label {
+            font-size: 12px; font-weight: 700; color: rgba(255,255,255,.85);
+            text-transform: uppercase; letter-spacing: .06em; white-space: nowrap;
+        }
+        .lang-btn {
+            padding: 6px 16px; border-radius: 20px;
+            border: 2px solid rgba(255,255,255,.4);
+            background: rgba(255,255,255,.12); color: #fff;
+            font-size: 13px; font-weight: 600; font-family: var(--font);
+            cursor: pointer; transition: all var(--transition);
+        }
+        .lang-btn:hover { background: rgba(255,255,255,.25); border-color: #fff; }
+        .lang-btn.active {
+            background: #fff; border-color: #fff; color: var(--blue-700);
+            box-shadow: 0 2px 8px rgba(0,0,0,.25);
+        }
+
+/* Header variant — readable on the blue background */
+.header .lang-switcher {
+    justify-content: center;
+    margin-bottom: 16px;
+    position: relative;
+    z-index: 2;
+}
+.header .lang-switcher-label { color: rgba(255,255,255,.85); }
+.header .lang-btn {
+    background: rgba(255,255,255,.12);
+    border-color: rgba(255,255,255,.4);
+    color: #fff;
+}
+.header .lang-btn:hover {
+    background: rgba(255,255,255,.25);
+    border-color: #fff;
+    color: #fff;
+}
+.header .lang-btn.active {
+    background: #fff;
+    border-color: #fff;
+    color: var(--blue-700);
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
     </style>
 </head>
 <body>
 <a href="#outageForm" class="skip-link">Skip to form</a>
 <div id="sr-live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <div id="offlineBanner" class="offline-banner" role="alert">
-    <span>⚠️ Offline — your report will send automatically once reconnected.</span>
-    <a href="tel:+639989893028" style="color:#78350f;font-weight:800;text-decoration:underline;margin-left:8px;">Call 09989893028</a>
-    <a id="offlineBannerMsgrLink" href="#" target="_blank" rel="noopener"
-       style="display:inline-flex;align-items:center;gap:5px;margin-left:10px;padding:4px 10px;background:#1877F2;color:#fff;border-radius:14px;font-size:12px;font-weight:700;text-decoration:none;">
-        💬 Chat with Agent
-    </a>
+    ⚠️ You are offline. Your report will be saved and sent automatically once your connection returns.
+    For emergencies call <strong>09989893028</strong> directly.
 </div>
 
 <div class="container">
@@ -539,13 +558,21 @@
         <span>EMERGENCY HOTLINE: <a href="tel:+639989893028">09989893028</a> <span class="badge">Globe</span> &nbsp;|&nbsp; Available 24/7</span>
     </div>
 
-    <div class="header">
+           <div class="header">
+        <div class="lang-switcher" role="group" aria-label="Select language">
+            <span class="lang-switcher-label">🌐 Language / Wika:</span>
+            <button type="button" class="lang-btn active" data-lang="en"
+                    onclick="switchLang('en')" aria-pressed="true">English</button>
+            <button type="button" class="lang-btn" data-lang="tl"
+                    onclick="switchLang('tl')" aria-pressed="false">Tagalog</button>
+            <button type="button" class="lang-btn" data-lang="hil"
+                    onclick="switchLang('hil')" aria-pressed="false">Hiligaynon</button>
+        </div>
         <h1>⚡ Report a Power Emergency</h1>
         <p>Submit outages and electrical hazards for rapid ILECO-1 response</p>
         <div class="header-badge">📍 Precise Location Detection Enabled</div>
     </div>
-
-    <div class="form-body">
+        <div class="form-body">
         <div class="progress-wrap" aria-label="Form completion progress">
             <div class="progress-step active" id="prog1"></div>
             <div class="progress-step"        id="prog2"></div>
@@ -577,7 +604,7 @@
 
         <div class="privacy-card" id="privacyCard" role="note">
             <h4>🔒 Privacy Notice — Data Privacy Act of 2012 (RA 10173)</h4>
-            ILECO-1 collects your name, contact number, and location <strong>solely to respond to your power emergency report.</strong>
+            <p id="privacyBody">ILECO-1 collects your name, contact number, and location <strong>solely to respond to your power emergency report.</strong></p>
             <ul>
                 <li>Your data is stored securely and used only for dispatch and follow-up.</li>
                 <li>Reports are retained for <strong>3 years</strong> per our data retention policy.</li>
@@ -669,9 +696,9 @@
                 </div>
                 <div class="field">
                     <label for="barangay">📍 Barangay <span class="req">*</span></label>
-                    <select id="barangay" name="barangay" required aria-required="true" aria-describedby="err-barangay">
-                        <option value="">Select Barangay</option>
-                    </select>
+                    <select id="barangay" name="barangay" required disabled aria-required="true" aria-describedby="err-barangay">
+    <option value="">Select Town First</option>
+</select>
                     <span class="field-error" id="err-barangay" role="alert"></span>
                 </div>
             </div>
@@ -811,7 +838,7 @@
                 <textarea id="details" name="details" required maxlength="2000"
                           placeholder="Describe the incident:&#10;• What happened?&#10;• Any hazards (fire, fallen wires)?&#10;• Injuries or property damage?&#10;• Landmarks near the location"
                           aria-required="true" aria-describedby="err-details detailsCounter"></textarea>
-                <div id="detailsCounter" class="char-counter danger">Please enter a description</div>
+                <div id="detailsCounter" class="char-counter neutral">Describe the incident (required)</div>
                 <span class="field-error" id="err-details" role="alert"></span>
             </div>
 
@@ -840,42 +867,356 @@
     </div>
 </div>
 
-<script src="/static/js/ileco-geodata.js"></script>
 <script>
-// ── Robust centroid lookup ──────────────────────────────────────
-// Guards against town/barangay key mismatches (trailing spaces,
-// casing, accents) between the <select> values in this HTML and
-// the keys inside ileco-geodata.js. Without this, a single mismatched
-// key silently killed auto-fill and forced the user to tap the map.
-function _normKey(s) {
-    return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
-}
 
-function getTownCentroids(town) {
-    if (!town || typeof barangayCentroids === 'undefined') return {};
-    if (barangayCentroids[town]) return barangayCentroids[town];
-    const targetTown = _normKey(town);
-    for (const tKey of Object.keys(barangayCentroids)) {
-        if (_normKey(tKey) === targetTown) return barangayCentroids[tKey];
-    }
-    return {};
-}
-
-function getBarangayCentroid(town, brgy) {
-    const townCentroids = getTownCentroids(town);
-    if (townCentroids[brgy]) return townCentroids[brgy];
-    const targetBrgy = _normKey(brgy);
-    for (const bKey of Object.keys(townCentroids)) {
-        if (_normKey(bKey) === targetBrgy) return townCentroids[bKey];
-    }
-    return null;
-}
 'use strict';
-// barangaysByTown and barangayCentroids are now loaded from
-// /static/js/ileco-geodata.js (see <script> tag added just before
-// this block in the HTML). This cuts ~40KB of inline JS out of every
-// page load and lets the browser cache that file across visits and
+console.info('ILECO-1 outage form: language build v3 loaded');
+
 // across report_outage.html / meter_concern.html.
+
+// ═══════════════════════════════════════════════════════════════
+// LANGUAGE SWITCHER
+// ═══════════════════════════════════════════════════════════════
+const TRANSLATIONS = {
+    en: {
+        headerTitle: '⚡ Report a Power Emergency',
+        headerSub: 'Submit outages and electrical hazards for rapid ILECO-1 response',
+        headerBadge: '📍 Precise Location Detection Enabled',
+        hotlineTitle: 'Life-threatening? Call', hotlineNow: 'NOW.',
+        hotlineSub: 'Fire, fallen wire, electric shock — call first, then fill this form.',
+        priorityToggle: 'Priority levels ▾',
+        falseReportWarn: '⚖️ <strong>Warning:</strong> Filing a false or malicious report may constitute a violation of Philippine law. Please only submit reports for genuine power emergencies.',
+        privacyTitle: 'Privacy Notice — Data Privacy Act of 2012 (RA 10173)',
+        privacyBody: 'ILECO-1 collects your name, contact number, and location <strong>solely to respond to your power emergency report.</strong>',
+        privacyBullet1: 'Your data is stored securely and used only for dispatch and follow-up.',
+        privacyBullet2: 'Reports are retained for <strong>3 years</strong> per our data retention policy.',
+        privacyBullet3: 'Your information will not be shared with third parties except as required by law.',
+        privacyBullet4: 'You may request access or deletion of your data by contacting ILECO-1.',
+        consentLabel: 'I have read the privacy notice and consent to the collection and use of my personal information for this emergency report.',
+        section1: '① Contact Information', section2: '② Your Location', section3: '③ Incident Details',
+        labelFullName: '👤 Full Name', labelContact: '📱 Contact Number', labelEmail: '📧 Email',
+        labelAccount: '🏠 Account Number', labelAccountHint: '(Optional — on your bill)',
+        labelTown: '🏙️ Town / Municipality', labelBarangay: '📍 Barangay',
+        labelAddress: '📍 Complete Address', labelAddressHint: '(Auto-filled from map or barangay selection)',
+        labelIncidentType: '📋 Type of Incident', labelAffected: '🏘️ Affected Area',
+        labelTime: '⏰ Time Incident Started', labelDuration: '⏱️ Duration (if ongoing)',
+        labelPhoto: '📷 Attach Photo or Video', labelPhotoHint: '(Optional — e.g. fallen pole, damaged wire, transformer)',
+        labelDetails: '📝 Detailed Description',
+        labelLandmark: '🏢 Nearest Landmark', labelLandmarkHint: '(Optional but helpful)',
+        phFullName: 'Juan Dela Cruz', phContact: '09171234567', phEmail: 'juan@example.com',
+        phAccount: 'Enter if available', phSelectTown: 'Select Town', phSelectBrgyReady: 'Select Barangay',
+        phAddress: 'Brgy. Bacan, Cabatuan, Iloilo',
+        phDetails: 'Describe the incident:\n• What happened?\n• Any hazards (fire, fallen wires)?\n• Injuries or property damage?\n• Landmarks near the location',
+        phLandmark: 'e.g., Near Cabatuan Public Market, beside Barangay Hall',
+        timeHint: 'Pre-filled to now — change if it started earlier.',
+        photoHint: 'Up to 3 files (photos or short videos, max 20MB each). Helps our crew confirm the issue before they arrive.',
+        gpsBtn: '📡 Use My Current GPS Location',
+        submitBtn: '⚡ Send Emergency Report', submitMedium: '📋 Send Report',
+        submitNote: 'By submitting you confirm this is a genuine power emergency. False reports may result in legal action.',
+        affSingle: 'Single House / Building', affMultiple: 'Multiple Houses (2–5)', affStreet: 'Entire Street / Purok',
+        affBarangay: 'Entire Barangay', affMultiBrgy: 'Multiple Barangays', affUnknown: 'Unknown',
+        durJustNow: 'Just Now (less than 15 min)', dur1530: '15–30 minutes', dur3060: '30 min – 1 hour',
+        dur13h: '1–3 hours', dur36h: '3–6 hours', durMore6h: 'More than 6 hours',
+        itPowerOutage: 'Power Outage / No Electricity', itFallenWire: 'Fallen Wire / Pole Down',
+        itVehicularAccident: 'Vehicular Accident (Hit Pole/Wire)', itLeaningPole: 'Leaning / Damaged Pole (Needs Inspection)',
+        itTreeBranch: 'Tree / Branch on Power Line', itVegetation: 'Tree/Vegetation Clearing Request (Near Power Lines)',
+        itTransformer: 'Transformer Problem / Explosion', itFire: 'Fire / Burning Smell', itSparking: 'Sparking / Arcing',
+        itVoltage: 'Voltage Problem (High/Low)', itSdi: 'No Power — My House Only',
+        itStreetlight: 'Streetlight Not Working', itEquipment: 'Equipment Damage', itOther: 'Other Emergency',
+    },
+    tl: {
+        headerTitle: '⚡ Mag-ulat ng Power Emergency',
+        headerSub: 'Mag-submit ng power outage at electrical hazard para sa mabilis na tugon ng ILECO-1',
+        headerBadge: '📍 Tumpak na Pagtukoy ng Lokasyon',
+        hotlineTitle: 'Banta sa buhay? Tumawag sa', hotlineNow: 'NGAYON.',
+        hotlineSub: 'Sunog, nahulog na wire, electric shock — tumawag muna, pagkatapos punan ang form.',
+        priorityToggle: 'Antas ng Priyoridad ▾',
+        falseReportWarn: '⚖️ <strong>Babala:</strong> Ang pag-file ng maling ulat ay maaaring lumalabag sa batas ng Pilipinas. Mag-ulat lamang ng tunay na emergency.',
+        privacyTitle: 'Abiso sa Privacy — Data Privacy Act of 2012 (RA 10173)',
+        privacyBody: 'Kinokolekta ng ILECO-1 ang iyong pangalan, numero ng telepono, at lokasyon <strong>para lamang matugunan ang iyong ulat.</strong>',
+        privacyBullet1: 'Ang iyong data ay ligtas na nakaimbak at ginagamit lamang para sa dispatch at follow-up.',
+        privacyBullet2: 'Ang mga ulat ay iniimbak sa loob ng <strong>3 taon</strong> ayon sa aming patakaran.',
+        privacyBullet3: 'Ang iyong impormasyon ay hindi ibabahagi sa ikatlong partido maliban kung kinakailangan ng batas.',
+        privacyBullet4: 'Maaari kang humingi ng access o pagtanggal ng iyong data sa pamamagitan ng pakikipag-ugnayan sa ILECO-1.',
+        consentLabel: 'Nabasa ko ang abiso sa privacy at sumasang-ayon ako sa koleksyon at paggamit ng aking personal na impormasyon para sa ulat na ito.',
+        section1: '① Impormasyon ng Kontak', section2: '② Iyong Lokasyon', section3: '③ Detalye ng Insidente',
+        labelFullName: '👤 Buong Pangalan', labelContact: '📱 Numero ng Telepono', labelEmail: '📧 Email',
+        labelAccount: '🏠 Account Number', labelAccountHint: '(Opsyonal — nasa iyong bill)',
+        labelTown: '🏙️ Bayan / Munisipalidad', labelBarangay: '📍 Barangay',
+        labelAddress: '📍 Kumpletong Address', labelAddressHint: '(Awtomatikong napupuno mula sa mapa)',
+        labelIncidentType: '📋 Uri ng Insidente', labelAffected: '🏘️ Apektadong Lugar',
+        labelTime: '⏰ Oras ng Simula ng Insidente', labelDuration: '⏱️ Tagal (kung nagpapatuloy)',
+        labelPhoto: '📷 Maglakip ng Larawan o Video', labelPhotoHint: '(Opsyonal — hal. nahulog na poste, sira na wire)',
+        labelDetails: '📝 Detalyadong Paglalarawan',
+        labelLandmark: '🏢 Pinakamalapit na Landmark', labelLandmarkHint: '(Opsyonal ngunit nakakatulong)',
+        phFullName: 'Juan Dela Cruz', phContact: '09171234567', phEmail: 'juan@example.com',
+        phAccount: 'Ilagay kung mayroon', phSelectTown: 'Pumili ng Bayan', phSelectBrgyReady: 'Pumili ng Barangay',
+        phAddress: 'Brgy. Bacan, Cabatuan, Iloilo',
+        phDetails: 'Ilarawan ang insidente:\n• Ano ang nangyari?\n• May panganib ba (sunog, nahulog na wire)?\n• May pinsala ba sa tao o ari-arian?\n• Mga landmark malapit sa lugar',
+        phLandmark: 'hal., Malapit sa Cabatuan Public Market, tabi ng Barangay Hall',
+        timeHint: 'Napunan na — baguhin kung nagsimula nang mas maaga.',
+        photoHint: 'Hanggang 3 file (larawan o maikling video, max 20MB bawat isa). Nakakatulong sa aming crew.',
+        gpsBtn: '📡 Gamitin ang Aking GPS Location',
+        submitBtn: '⚡ Ipadala ang Emergency Report', submitMedium: '📋 Ipadala ang Ulat',
+        submitNote: 'Sa pag-submit, kinukumpirma mo na ito ay tunay na emergency. Ang maling ulat ay maaaring magresulta sa legal na aksyon.',
+        affSingle: 'Isang Bahay / Gusali', affMultiple: 'Maraming Bahay (2–5)', affStreet: 'Buong Kalye / Purok',
+        affBarangay: 'Buong Barangay', affMultiBrgy: 'Maraming Barangay', affUnknown: 'Hindi Alam',
+        durJustNow: 'Kasisimula Lang (wala pang 15 minuto)', dur1530: '15–30 minuto', dur3060: '30 minuto – 1 oras',
+        dur13h: '1–3 oras', dur36h: '3–6 oras', durMore6h: 'Mahigit 6 na oras',
+        itPowerOutage: 'Power Outage / Walang Kuryente', itFallenWire: 'Nahulog na Wire / Poste',
+        itVehicularAccident: 'Aksidente ng Sasakyan (Nabangga ang Poste/Wire)', itLeaningPole: 'Nakahilig / Sirang Poste (Kailangan ng Inspeksyon)',
+        itTreeBranch: 'Puno / Sanga sa Linya ng Kuryente', itVegetation: 'Kahilingan sa Pagputol ng Puno/Halaman (Malapit sa Linya)',
+        itTransformer: 'Problema sa Transformer / Pagsabog', itFire: 'Sunog / Amoy Nasusunog', itSparking: 'Nagki-Spark / Arcing',
+        itVoltage: 'Problema sa Boltahe (Mataas/Mababa)', itSdi: 'Walang Kuryente — Bahay Ko Lang',
+        itStreetlight: 'Hindi Gumagana ang Street Light', itEquipment: 'Sira ang Kagamitan', itOther: 'Ibang Emergency',
+    },
+    hil: {
+        headerTitle: '⚡ Ireport ang Power Emergency',
+        headerSub: 'Ipadala ang mga outage kag electrical hazard para sa maabtik nga tubag sang ILECO-1',
+        headerBadge: '📍 Tumpak nga Pagtino sang Lokasyon',
+        hotlineTitle: 'Delikado sa kinabuhi? Tawga ang', hotlineNow: 'KARON DAYON.',
+        hotlineSub: 'Sunog, natumba nga alambre, electric shock — magtawag anay, dayon sulaton ang porma.',
+        priorityToggle: 'Ang mga Antas sang Priyoridad ▾',
+        falseReportWarn: '⚖️ <strong>Pahimangno:</strong> Ang pag-file sang butig nga report mahimo nga makalapas sa balaod sang Pilipinas. Mag-report lamang sang tinuod nga emergency.',
+        privacyTitle: 'Abiso sa Privacy — Data Privacy Act of 2012 (RA 10173)',
+        privacyBody: 'Nagakolekta ang ILECO-1 sang imo ngalan, numero sang telepono, kag lokasyon <strong>para lamang magtubag sa imo emergency report.</strong>',
+        privacyBullet1: 'Ang imo datos ginatipigan nga sigurado kag ginagamit lamang para sa dispatch kag follow-up.',
+        privacyBullet2: 'Ang mga report ginatipigan sa sulod sang <strong>3 ka tuig</strong> suno sa amon patakaran.',
+        privacyBullet3: 'Ang imo impormasyon indi igabahin sa iban gawas kon ginapangayo sang balaod.',
+        privacyBullet4: 'Makapangayo ka sang access ukon pagtanggal sang imo datos paagi sa pagkontak sa ILECO-1.',
+        consentLabel: 'Nabasa ko ang abiso sa privacy kag nagasugot ako sa koleksyon kag paggamit sang akon personal nga impormasyon para sa report nga ini.',
+        section1: '① Impormasyon sang Kontak', section2: '② Ang Imo Lokasyon', section3: '③ Detalye sang Insidente',
+        labelFullName: '👤 Buo nga Ngalan', labelContact: '📱 Numero sang Telepono', labelEmail: '📧 Email',
+        labelAccount: '🏠 Account Number', labelAccountHint: '(Opsyonal — makita sa imo bill)',
+        labelTown: '🏙️ Banwa / Munisipyo', labelBarangay: '📍 Barangay',
+        labelAddress: '📍 Kompleto nga Adres', labelAddressHint: '(Awtomatiko nga napuno halin sa mapa)',
+        labelIncidentType: '📋 Klase sang Insidente', labelAffected: '🏘️ Apektado nga Lugar',
+        labelTime: '⏰ Oras nga Nagsugod ang Insidente', labelDuration: '⏱️ Tagal (kon nagapadayon)',
+        labelPhoto: '📷 Magdugang sang Larawan ukon Video', labelPhotoHint: '(Opsyonal — hal. natumba nga poste, naplag nga alambre)',
+        labelDetails: '📝 Detalyado nga Paghulagway',
+        labelLandmark: '🏢 Pinakamalapit nga Landmark', labelLandmarkHint: '(Opsyonal pero makabulig)',
+        phFullName: 'Juan Dela Cruz', phContact: '09171234567', phEmail: 'juan@example.com',
+        phAccount: 'Isulod kon may ara', phSelectTown: 'Pilia ang Banwa', phSelectBrgyReady: 'Pilia ang Barangay',
+        phAddress: 'Brgy. Bacan, Cabatuan, Iloilo',
+        phDetails: 'Ihulagway ang insidente:\n• Ano ang nahanabo?\n• May delikado ba (sunog, natumba nga alambre)?\n• May nasakitan ukon pinsala sa ari-arian?\n• Mga landmark malapit sa lugar',
+        phLandmark: 'hal., Malapit sa Cabatuan Public Market, sa tabi sang Barangay Hall',
+        timeHint: 'Napunan na — baguha kon nagsugod na sang mas una.',
+        photoHint: 'Hasta 3 ka file (larawan ukon maikli nga video, max 20MB ang isa). Makabulig sa amon crew.',
+        gpsBtn: '📡 Gamiton ang Akon GPS Location',
+        submitBtn: '⚡ Ipadala ang Emergency Report', submitMedium: '📋 Ipadala ang Report',
+        submitNote: 'Sa pag-submit, ginakumpirma mo nga ini tinuod nga emergency. Ang butig nga report mahimo magresulta sa legal nga aksyon.',
+        affSingle: 'Isa ka Balay / Gusali', affMultiple: 'Madamo nga Balay (2–5)', affStreet: 'Bug-os nga Kalsada / Purok',
+        affBarangay: 'Bug-os nga Barangay', affMultiBrgy: 'Madamo nga Barangay', affUnknown: 'Wala Mahibaloan',
+        durJustNow: 'Karon Lang (wala pa 15 minuto)', dur1530: '15–30 minuto', dur3060: '30 minuto – 1 oras',
+        dur13h: '1–3 oras', dur36h: '3–6 oras', durMore6h: 'Sobra sa 6 ka oras',
+        itPowerOutage: 'Power Outage / Wala sang Kuryente', itFallenWire: 'Natumba nga Alambre / Poste',
+        itVehicularAccident: 'Aksidente sang Sasakyan (Nabunggo ang Poste/Alambre)', itLeaningPole: 'Nagkiling / Sira nga Poste (Kinahanglan Inspeksyon)',
+        itTreeBranch: 'Kahoy / Sanga sa Linya sang Kuryente', itVegetation: 'Hangyo sa Pagputol sang Kahoy/Tanum (Malapit sa Linya)',
+        itTransformer: 'Problema sa Transformer / Pagbuto', itFire: 'Sunog / Baho nga Nasusunog', itSparking: 'Nagaspark / Arcing',
+        itVoltage: 'Problema sa Boltahe (Mataas/Manubo)', itSdi: 'Wala sang Kuryente — Balay Ko Lang',
+        itStreetlight: 'Indi Naggagana ang Street Light', itEquipment: 'Sira ang Kagamitan', itOther: 'Iban pa nga Emergency',
+    }
+};
+
+const BRGY_FIRST_TEXT = {
+    en:  'Select Town First',
+    tl:  'Pumili ng Bayan Muna',
+    hil: 'Pilia anay ang Banwa'
+};
+let _currentLang = 'en';
+
+function _langEl(sel) { return document.querySelector(sel); }
+function _langText(sel, txt) { const el = _langEl(sel); if (el) el.textContent = txt; }
+function _langHTML(sel, html) { const el = _langEl(sel); if (el) el.innerHTML = html; }
+function _langPh(id, txt) { const el = document.getElementById(id); if (el) el.placeholder = txt; }
+function _langOptions(id, texts) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    Array.from(sel.options).forEach((o, i) => { if (texts[i] !== undefined) o.text = texts[i]; });
+}
+// Label with optional (.req / .opt) spans kept intact
+function _langLabel(forId, text, hint, withReq) {
+    const lbl = document.querySelector('label[for="' + forId + '"]');
+    if (!lbl) return;
+    const req = lbl.querySelector('.req');
+    lbl.textContent = text + ' ';
+    if (hint) {
+        const s = document.createElement('span');
+        s.className = 'opt'; s.textContent = hint;
+        lbl.appendChild(s); lbl.appendChild(document.createTextNode(' '));
+    }
+    if (req && (withReq !== false)) lbl.appendChild(req);
+}
+
+function switchLang(lang) {
+    if (!TRANSLATIONS[lang]) return;
+    _currentLang = lang;
+    document.documentElement.lang = lang;
+    const t = TRANSLATIONS[lang];
+
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+        const active = btn.dataset.lang === lang;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+
+    // Header
+    _langText('.header h1', t.headerTitle);
+    _langText('.header > p', t.headerSub);
+    _langText('.header-badge', t.headerBadge);
+
+    // Hotline + priority toggle + warning
+    _langHTML('.hl-title', t.hotlineTitle + ' <a href="tel:+639989893028">09989893028</a> ' + t.hotlineNow);
+    _langText('.hl-sub', t.hotlineSub);
+    const pri = document.getElementById('priToggleBtn');
+    if (pri) pri.textContent = document.getElementById('priorityInfo').classList.contains('open') ? 'Hide ▴' : t.priorityToggle;
+    _langHTML('.false-report-warn', t.falseReportWarn);
+
+    // Privacy card
+    _langHTML('#privacyCard h4', '🔒 ' + t.privacyTitle);
+    _langHTML('#privacyBody', t.privacyBody);
+    const items = document.querySelectorAll('#privacyCard ul > li');
+    [t.privacyBullet1, t.privacyBullet2, t.privacyBullet3, t.privacyBullet4]
+        .forEach((txt, i) => { if (items[i]) items[i].innerHTML = txt; });
+    _langHTML('label[for="consentCheck"]', t.consentLabel + ' <span>*</span>');
+
+    // Section labels
+    const secs = document.querySelectorAll('.section-label > span:first-child');
+    if (secs[0]) secs[0].textContent = t.section1;
+    if (secs[1]) secs[1].textContent = t.section2;
+    if (secs[2]) secs[2].textContent = t.section3;
+
+    // Field labels
+    _langLabel('fullName', t.labelFullName);
+    _langLabel('contactNumber', t.labelContact);
+    _langLabel('email', t.labelEmail, lang === 'en' ? '(Optional)' : '(Opsyonal)');
+    _langLabel('accountNumber', t.labelAccount, t.labelAccountHint);
+    _langLabel('town', t.labelTown);
+    _langLabel('barangay', t.labelBarangay);
+    _langLabel('address', t.labelAddress, t.labelAddressHint);
+    _langLabel('incidentType', t.labelIncidentType);
+    _langLabel('affectedArea', t.labelAffected);
+    _langLabel('incidentTime', t.labelTime);
+    _langLabel('duration', t.labelDuration);
+    _langLabel('photoInput', t.labelPhoto, t.labelPhotoHint);
+    _langLabel('details', t.labelDetails);
+    _langLabel('landmark', t.labelLandmark, t.labelLandmarkHint);
+
+    // Placeholders
+    _langPh('fullName', t.phFullName);
+    _langPh('contactNumber', t.phContact);
+    _langPh('email', t.phEmail);
+    _langPh('accountNumber', t.phAccount);
+    _langPh('address', t.phAddress);
+    _langPh('details', t.phDetails);
+    _langPh('landmark', t.phLandmark);
+
+    // Town / barangay placeholder options (first option only)
+    const townSel = document.getElementById('town');
+    if (townSel && townSel.options[0]) townSel.options[0].text = t.phSelectTown;
+    const brgySel = document.getElementById('barangay');
+    if (brgySel && brgySel.options[0]) {
+        brgySel.options[0].text = brgySel.disabled ? BRGY_FIRST_TEXT[lang] : t.phSelectBrgyReady;
+    }
+
+    // Hints
+    _langText('#incidentTime ~ .field-hint', t.timeHint);
+    _langText('#photoInput ~ .field-hint', t.photoHint);
+
+    // GPS button (leave alone while it is showing a live status)
+    const gps = document.getElementById('gpsBtn');
+    if (gps && !gps.disabled) gps.textContent = t.gpsBtn;
+
+    // Disclaimer under the submit button
+    _langText('#outageForm > p', t.submitNote);
+
+    // Select options
+    _langOptions('affectedArea', [t.affSingle, t.affMultiple, t.affStreet, t.affBarangay, t.affMultiBrgy, t.affUnknown]);
+    _langOptions('duration', [t.durJustNow, t.dur1530, t.dur3060, t.dur13h, t.dur36h, t.durMore6h]);
+    _langOptions('incidentType', [
+        t.itPowerOutage, t.itFallenWire, t.itVehicularAccident, t.itLeaningPole, t.itTreeBranch,
+        t.itVegetation, t.itTransformer, t.itFire, t.itSparking, t.itVoltage, t.itSdi,
+        t.itStreetlight, t.itEquipment, t.itOther
+    ]);
+
+    // Submit button label depends on priority + language
+    updatePriorityBar();
+
+    try { localStorage.setItem('ileco_lang', lang); } catch (_) {}
+}
+
+// ── Translation helpers ────────────────────────────────────────────────────
+function _setText(selector, text) {
+    const el = typeof selector === 'string'
+        ? document.querySelector(selector)
+        : selector;
+    if (el) el.textContent = text;
+}
+function _setHTML(selector, html) {
+    const el = document.querySelector(selector);
+    if (el) el.innerHTML = html;
+}
+function _setPlaceholder(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.placeholder = text;
+}
+function _setSelectOptions(id, texts) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    Array.from(sel.options).forEach((opt, i) => {
+        if (texts[i] !== undefined) opt.text = texts[i];
+    });
+}
+function _setLabelText(fieldId, html) {
+    // Find label by for= attribute; preserve the req/opt spans
+    const lbl = document.querySelector(`label[for="${fieldId}"]`);
+    if (!lbl) return;
+    const req  = lbl.querySelector('.req');
+    const opt  = lbl.querySelector('.opt');
+    lbl.textContent = html + ' ';   // clear, re-add base text
+    if (req) lbl.appendChild(req);
+    if (opt) lbl.appendChild(opt);
+}
+function _setAccountLabel(t) {
+    const lbl = document.querySelector('label[for="accountNumber"]');
+    if (!lbl) return;
+    lbl.innerHTML = `${t.labelAccount} <span class="opt">${t.labelAccountHint}</span>`;
+}
+function _setAddressLabel(t) {
+    const lbl = document.querySelector('label[for="address"]');
+    if (!lbl) return;
+    lbl.innerHTML = `${t.labelAddress} <span class="opt">${t.labelAddressHint}</span> <span class="req">*</span>`;
+}
+function _setPhotoLabel(t) {
+    const lbl = document.querySelector('label[for="photoInput"]');
+    if (!lbl) return;
+    lbl.innerHTML = `${t.labelPhoto} <span class="opt">${t.labelPhotoHint}</span>`;
+}
+function _setDetailsLabel(t) {
+    const lbl = document.querySelector('label[for="details"]');
+    if (!lbl) return;
+    lbl.innerHTML = `${t.labelDetails} <span class="req">*</span>`;
+}
+function _setLandmarkLabel(t) {
+    const lbl = document.querySelector('label[for="landmark"]');
+    if (!lbl) return;
+    lbl.innerHTML = `${t.labelLandmark} <span class="opt">${t.labelLandmarkHint}</span>`;
+}
+function _rebuildPrivacy(t) {
+    const card = document.getElementById('privacyCard');
+    if (!card) return;
+    const h4 = card.querySelector('h4');
+    if (h4) h4.innerHTML = '🔒 ' + t.privacyTitle.replace('🔒 ', '');
+    const body = document.getElementById('privacyBody');
+    if (body) body.innerHTML = t.privacyBody;
+    const items = card.querySelectorAll('ul > li');
+    [t.privacyBullet1, t.privacyBullet2, t.privacyBullet3, t.privacyBullet4]
+        .forEach((txt, i) => { if (items[i] && txt) items[i].innerHTML = txt; });
+}
+
+
+
+
 
 // ═══════════════════════════════════════════════════════════════
 // SECURITY / SANITIZATION
@@ -902,12 +1243,9 @@ let _formTokenIssuedAt = 0;
 let _lastClientSubmit = 0;
 const CLIENT_MIN_INTERVAL = 60_000;
 
-// Server-side token TTL is 1 hour (see app.py _TOKEN_TTL). A real
-// emergency-report filler can easily take longer than that — poor
-// signal, re-checking details, interruptions. Refresh well before
-// the server would reject it, so submission never fails due to a
-// stale token.
-const TOKEN_SAFE_LIFETIME = 45 * 60 * 1000; // 45 min — comfortably under the 60 min server TTL
+// Server-side token TTL is ~1hr; refresh well before that so a slow
+// filler (real outage, bad signal, distraction) never hits a dead token.
+const TOKEN_SAFE_LIFETIME = 45 * 60 * 1000; // 45 min
 
 async function _doFetchToken() {
     try {
@@ -934,20 +1272,13 @@ async function ensureFormToken(forceRefresh = false) {
     return _formToken;
 }
 
-// ── Proactive background refresh ──────────────────────────────────
-// Covers the case where the tab stays active/foregrounded the whole
-// time (interval fires normally).
+// Proactive background refresh while the tab is active
 setInterval(() => { ensureFormToken(true); }, TOKEN_SAFE_LIFETIME);
 
-// ── Refresh-on-return ──────────────────────────────────────────────
-// Mobile browsers routinely suspend timers in backgrounded tabs, so
-// the interval above may simply never fire while the person is
-// filling the form with the app in the background. Catch up the
-// moment they come back.
+// Mobile browsers suspend timers in backgrounded tabs — catch up on
+// refresh the moment the person returns to the form.
 document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-        ensureFormToken(true);
-    }
+    if (document.visibilityState === 'visible') ensureFormToken(true);
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -975,7 +1306,6 @@ const DRAFT_FIELDS = ['fullName','contactNumber','email','accountNumber',
 
 let _draftSaveTimer = null;
 function saveDraft() {
-    if (_submitted) return; // ── FIX: never resave a draft after a successful submission ──
     const draft = {};
     DRAFT_FIELDS.forEach(id => {
         const el = document.getElementById(id);
@@ -1006,13 +1336,13 @@ function loadDraft() {
             if (el && draft[id] !== undefined && draft[id] !== '') el.value = draft[id];
         });
 
-        // Restore town, then populate barangay dropdown, then restore barangay
         const townEl = document.getElementById('town');
         if (townEl && draft['town']) {
             townEl.value = draft['town'];
             const brgysByTown = barangaysByTown[draft['town']] || [];
             const sel = document.getElementById('barangay');
-            sel.innerHTML = '<option value="">Select Barangay</option>';
+            sel.disabled = false; // town is set, so barangay becomes selectable
+            sel.innerHTML = `<option value="">${TRANSLATIONS[_currentLang].phSelectBrgyReady}</option>`;
             brgysByTown.forEach(b => {
                 const o = document.createElement('option');
                 o.value = b; o.textContent = b;
@@ -1047,15 +1377,14 @@ function saveOfflineQueue(queue) {
 
 function queueOfflineReport(payload, elapsedMs) {
     const queue = getOfflineQueue();
-    const entry = {
+    queue.push({
         id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         payload,
         elapsedMs,
         queuedAt: Date.now()
-    };
-    queue.push(entry);
+    });
     saveOfflineQueue(queue);
-    return { id: entry.id, queueLength: queue.length };
+    return queue.length;
 }
 
 function removeFromOfflineQueue(id) {
@@ -1075,20 +1404,18 @@ async function flushOfflineQueue() {
 
     for (const item of queue) {
         try {
-            let token = await ensureFormToken();
+            const token = await ensureFormToken();
             if (!token) continue; // still can't reach server — leave queued, retry on next flush
 
-            let res = await doSubmit(token, item);
-
-            // Queued reports can easily outlive the 1-hour form-token TTL
-            // (offline for >1hr is normal during a real outage). Don't treat
-            // an expired token as a permanent failure — refresh it and
-            // retry once immediately instead of dropping the report.
-            if (res.status === 403) {
-                _formToken = null;
-                token = await ensureFormToken();
-                if (token) res = await doSubmit(token, item);
-            }
+            const res = await fetch('/api/submit_power_outage', {
+                method: 'POST',
+                headers: {
+                    'Content-Type':  'application/json',
+                    'X-Form-Token':  token,
+                    'X-Submit-Time': String(item.elapsedMs),
+                },
+                body: JSON.stringify(item.payload)
+            });
 
             let resData = {};
             try {
@@ -1100,33 +1427,16 @@ async function flushOfflineQueue() {
                 removeFromOfflineQueue(item.id);
                 sentCount++;
                 sessionStorage.setItem('ileco_last_ref', resData.reference_id || 'N/A');
-
-                // ← THE ACTUAL FIX: if this queued item is the one currently
-                // shown as "💾 Report Saved Offline", upgrade that same screen
-                // into the full success view with reference number, priority,
-                // Messenger link, and Talk-to-Agent button — instead of only
-                // a toast that the user may not even see (dashboard blur, tab
-                // switch, screen off while reconnecting, etc.)
-                if (item.id === _pendingOfflineQueueId) {
-                    _pendingOfflineQueueId = null;
-                    buildAndShowSuccessUI(
-                        resData.reference_id || generateFallbackRefId(),
-                        item.payload,
-                        item.payload._client_priority || 'HIGH',
-                        resData.feeder_name || item.payload.feeder_name,
-                        resData.is_followup === true
-                    );
-                }
-            } else if (res.status === 429 || resData.error_code === 'ACTIVE_REPORT_EXISTS') {
-                // Genuine duplicate — won't resolve on retry, drop it
-                removeFromOfflineQueue(item.id);
-                failCount++;
-            } else if (res.status === 403) {
-                // Still invalid even after a fresh token — leave queued,
-                // try again on the next flush instead of losing the report.
+                        } else if (res.status === 403) {
+                // Stale/invalid token — refresh and keep the report queued for the next flush
+                _formToken = null;
+                await ensureFormToken(true);
                 continue;
+            } else if (res.status === 429 && !resData.reference_id) {
+                // Rate-limited (not a duplicate) — keep queued, stop hammering the server
+                break;
             } else if (res.status >= 400 && res.status < 500) {
-                // Other permanent client errors (bad payload, etc.) — drop.
+                // Duplicate (429 with reference_id) or genuinely bad data — retry won't help
                 removeFromOfflineQueue(item.id);
                 failCount++;
             }
@@ -1148,91 +1458,12 @@ async function flushOfflineQueue() {
     }
 }
 
-let _pendingOfflineQueueId = null; // tracks which queued item is currently shown as "Saved Offline"
-
-function buildAndShowSuccessUI(refId, payload, priorityStr, feederName, isFollowup) {
-    sessionStorage.setItem('ileco_last_ref', refId);
-
-    const successTitle = isFollowup ? '📋 Follow-Up Recorded!' : '✅ Report Successfully Submitted!';
-    const successIntro = isFollowup
-        ? `<div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:14px;color:#78350f;">ℹ️ <strong>This is a follow-up to an earlier report.</strong><br>Your report count has been raised and our team has been notified.</div>`
-        : '';
-
-    const p    = (priorityStr || 'HIGH').toUpperCase();
-    const pCfg = {
-        CRITICAL:{ col:'#991b1b', bg:'#fee2e2', icon:'🚨', text:'Emergency response team alerted. Help is on the way.' },
-        HIGH:    { col:'#9a3412', bg:'#fed7aa', icon:'⚡', text:'Our team will respond urgently.' },
-        MEDIUM:  { col:'#4c1d95', bg:'#f3e8ff', icon:'🔦', text:'Our service team will schedule an inspection.' },
-    }[p] || { col:'#1e40af', bg:'#dbeafe', icon:'⚡', text:'Our team will respond.' };
-
-    const feederLine = feederName ? `<p><strong>⚡ Feeder:</strong> ${esc(feederName)}</p>` : '';
-    const approxNote = payload.is_approximate_location
-        ? `<div class="approx-note">📍 Location set from barangay selection (approximate). Tap the map or use GPS next time for faster dispatch.</div>` : '';
-
-    document.getElementById('successDetail').innerHTML = `
-        ${successIntro}
-        <div class="ref-box">
-            <div class="ref-lbl">Your Reference Number</div>
-            <div class="ref-id">${esc(refId)}</div>
-            <button class="copy-btn" onclick="copyRef('${esc(refId)}')">📋 Copy Reference Number</button>
-        </div>
-        <div style="background:${pCfg.bg};padding:13px;border-radius:10px;margin-bottom:13px;border:1px solid ${pCfg.col}20;">
-            <div style="font-size:17px;font-weight:700;color:${pCfg.col};margin-bottom:5px;">${pCfg.icon} ${p} PRIORITY</div>
-            <p style="color:${pCfg.col};margin:0;font-size:13px;">${pCfg.text}</p>
-        </div>
-        <div class="success-detail">
-            <p><strong>📍 Location:</strong> ${esc(payload.address)}</p>
-            ${feederLine}
-            ${approxNote}
-            <p><strong>📞 Contact:</strong> ${esc(payload.contact_number)}</p>
-            <p style="margin-top:10px;">✅ Your report has been received. Quote your reference number for any follow-up calls.</p>
-            <hr style="margin:12px 0;border:none;border-top:1px solid #e5e7eb;">
-            <p style="font-size:12px;color:#6b7280;">24/7 hotline: <strong><a href="tel:+639989893028" style="color:#1e40af;">09989893028</a></strong> (Globe)</p>
-        </div>
-        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px;margin-top:14px;">
-            <div style="font-weight:700;color:#1e40af;font-size:14px;margin-bottom:6px;">💬 Need to add details or have another concern?</div>
-            <p style="font-size:13px;color:#1e3a8a;margin-bottom:12px;">
-                Chat with our ILECO-1 Messenger assistant anytime — quote
-                <strong>${esc(refId)}</strong> in follow-up report then track my report so we can pull up your report instantly.
-            </p>
-            <a href="${messengerLink('track_' + refId)}" target="_blank" rel="noopener"
-               style="display:flex;align-items:center;justify-content:center;gap:8px;background:#1877F2;color:#fff;text-decoration:none;font-weight:700;padding:11px;border-radius:10px;font-size:14px;margin-bottom:8px;">
-                💬 Open Messenger Chat
-            </a>
-            <a href="${messengerLink('talk_to_agent')}" target="_blank" rel="noopener"
-               style="display:flex;align-items:center;justify-content:center;gap:8px;background:#fff;color:#1877F2;text-decoration:none;font-weight:700;padding:11px;border-radius:10px;font-size:14px;border:2px solid #1877F2;">
-                🧑‍💼 Chat with an Live Agent
-            </a>
-            <p style="font-size:11px;color:#64748b;margin-top:8px;text-align:center;">
-                Opens Facebook Messenger. If it doesn't open automatically, search "ILECO-1" on Messenger and tap the chat.
-            </p>
-        </div>`;
-
-    document.getElementById('successWrap').querySelector('h3').textContent = successTitle;
-    document.getElementById('outageForm').style.display  = 'none';
-    document.getElementById('priorityBar').style.display = 'none';
-    document.getElementById('successWrap').style.display = 'block';
-    document.getElementById('successWrap').scrollIntoView({ behavior:'smooth' });
-    srAnnounce(`${isFollowup ? 'Follow-up' : 'Report'} submitted. Reference: ${refId}`);
-}
-function doSubmit(token, item) {
-    return fetch('/api/submit_power_outage', {
-        method: 'POST',
-        headers: {
-            'Content-Type':  'application/json',
-            'X-Form-Token':  token,
-            'X-Submit-Time': String(item.elapsedMs),
-        },
-        body: JSON.stringify(item.payload)
-    });
-}
-
 setInterval(saveDraft, 30_000);
 DRAFT_FIELDS.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', saveDraftDebounced);
 });
-setInterval(flushOfflineQueue, 45_000);
+
 // ═══════════════════════════════════════════════════════════════
 // LEAVE PAGE PROTECTION
 // ═══════════════════════════════════════════════════════════════
@@ -1287,34 +1518,52 @@ function dismissDupBanner() {
 // ═══════════════════════════════════════════════════════════════
 window.addEventListener('online',  () => {
     document.getElementById('offlineBanner').classList.remove('show');
-    showToast('Back online', 'success', 2500);
+    showToast('Connection restored. You can now submit.', 'success');
     flushOfflineQueue();
 });
 window.addEventListener('offline', () => {
-    const link = document.getElementById('offlineBannerMsgrLink');
-    if (link) link.href = messengerLink('talk_to_agent');
     document.getElementById('offlineBanner').classList.add('show');
-    showToast('You are offline', 'info', 3000);
+    showToast('You are offline. Your report will send automatically once reconnected.', 'info', 6000);
 });
 
 // ═══════════════════════════════════════════════════════════════
 // TOAST & SR ANNOUNCE
 // ═══════════════════════════════════════════════════════════════
-let _activeToastCount = 0;
+let _activeToasts = [];
 const MAX_TOASTS = 3;
+const TOAST_GAP = 10;
+const TOAST_BASE_TOP = 76;
+
+// Recompute each active toast's vertical offset so multiple toasts
+// cascade downward instead of rendering on top of one another.
+function _repositionToasts() {
+    let top = TOAST_BASE_TOP;
+    _activeToasts.forEach(el => {
+        el.style.top = `${top}px`;
+        top += el.offsetHeight + TOAST_GAP;
+    });
+}
 
 function showToast(msg, type = 'info', ms = 4000) {
-    if (_activeToastCount >= MAX_TOASTS) return;
-    _activeToastCount++;
+    if (_activeToasts.length >= MAX_TOASTS) return;
     const t = document.createElement('div');
     t.className = `toast toast-${type}`;
     const icon = { error:'❌', success:'✅', info:'ℹ️' }[type] || 'ℹ️';
     t.innerHTML = `<div class="toast-inner"><span>${icon}</span><span>${esc(msg)}</span></div>`;
     document.body.appendChild(t);
+
+    _activeToasts.push(t);
+    _repositionToasts();
+
     requestAnimationFrame(() => { requestAnimationFrame(() => t.classList.add('show')); });
+
     setTimeout(() => {
         t.classList.remove('show');
-        setTimeout(() => { t.remove(); _activeToastCount--; }, 350);
+        setTimeout(() => {
+            t.remove();
+            _activeToasts = _activeToasts.filter(el => el !== t);
+            _repositionToasts(); // remaining toasts slide up smoothly
+        }, 350);
     }, ms);
 }
 
@@ -1346,13 +1595,13 @@ function togglePriorityInfo() {
     const btn = document.getElementById('priToggleBtn');
     const open = box.classList.toggle('open');
     btn.setAttribute('aria-expanded', open);
-    btn.textContent = open ? 'Hide ▴' : 'Priority levels ▾';
+    btn.textContent = open ? 'Hide ▴' : TRANSLATIONS[_currentLang].priorityToggle;
 }
 
 // ═══════════════════════════════════════════════════════════════
 // MAP INITIALIZATION
 // ═══════════════════════════════════════════════════════════════
-const MAPBOX_TOKEN = '{{ mapbox_token }}';
+const MAPBOX_TOKEN = 'REMOVED_MAPBOX_TOKEN';
 
 let _mapInitAttempts = 0;
 const MAP_INIT_MAX_ATTEMPTS = 25;
@@ -1441,9 +1690,6 @@ let _lat = null, _lng = null, _accuracy = null;
 let _isPrecise    = false;
 let _isFullscreen = false;
 let _currentFeeder = null;
-let _feederAbortCtrl = null;
-let _feederDebounceTimer = null;
-const _feederCache = new Map(); // rounded "lat,lng" -> result, avoids re-querying same spot
 
 function updateMarker(lat, lng, accuracy, isCentroid) {
     if (_marker)      { _map.removeLayer(_marker);      _marker      = null; }
@@ -1520,16 +1766,16 @@ function getMyLocation() {
     );
 }
 
-// ═══════════════════════════════════════════════════════════════
-// REVERSE GEOCODE
-// ═══════════════════════════════════════════════════════════════
+let _geoReqSeq = 0;
 async function reverseGeocode(lat, lng) {
+    const seq = ++_geoReqSeq;
     try {
         const r = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
-            { headers: { 'User-Agent': 'ILECO1-OutageForm/1.0' } }
+            { headers: { 'Accept-Language': 'en' } }
         );
         const d = await r.json();
+        if (seq !== _geoReqSeq) return; // a newer pin superseded this response
         let addr = '';
         if (d.address) {
             const a = d.address;
@@ -1545,29 +1791,14 @@ async function reverseGeocode(lat, lng) {
     } catch { /* non-fatal */ }
 }
 
-function checkFeeder(lat, lng) {
-    clearTimeout(_feederDebounceTimer);
-    _feederDebounceTimer = setTimeout(() => _checkFeederNow(lat, lng), 150);
-}
-
-function _feederCacheKey(lat, lng) {
-    // Round to ~11m precision — same tap-area reuses cached result instantly
-    return `${lat.toFixed(4)},${lng.toFixed(4)}`;
-}
-
-async function _checkFeederNow(lat, lng) {
-    const div    = document.getElementById('feederInfo');
-    const strip  = document.getElementById('outageStatusStrip');
+let _feederReqSeq = 0;
+async function checkFeeder(lat, lng) {
+    const seq   = ++_feederReqSeq;
+    const div   = document.getElementById('feederInfo');
+    const strip = document.getElementById('outageStatusStrip');
     _currentFeeder = null;
     div.style.display = 'block';
     strip.className = 'outage-status-strip';
-
-    const cacheKey = _feederCacheKey(lat, lng);
-    const cached = _feederCache.get(cacheKey);
-    if (cached) {
-        _renderFeederResult(cached, div, strip);
-        return;
-    }
 
     div.innerHTML = `<div class="feeder-card checking">
         <div class="feeder-pulse"></div>
@@ -1577,23 +1808,52 @@ async function _checkFeederNow(lat, lng) {
             <div class="feeder-note">Querying spatial database</div>
         </div></div>`;
 
-    // Cancel any still-running previous request so stale responses can't overwrite the UI
-    if (_feederAbortCtrl) _feederAbortCtrl.abort();
-    _feederAbortCtrl = new AbortController();
-
     try {
         const res = await fetch('/api/check_feeder', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lat, lng }),
-            signal: _feederAbortCtrl.signal
+            body: JSON.stringify({ lat, lng })
         });
         if (!res.ok) throw new Error(`${res.status}`);
         const d = await res.json();
-        _feederCache.set(cacheKey, d);
-        _renderFeederResult(d, div, strip);
-        return;
-    } catch (err) {
-        if (err.name === 'AbortError') return; // superseded by a newer click — do nothing
+        if (seq !== _feederReqSeq) return; // stale response — a newer pin is in flight
+
+        if (d.success && d.feeder) {
+            _currentFeeder = d.feeder;
+            const isNearest = d.method === 'nearest';
+            const cardClass = isNearest ? 'nearest' : 'inside';
+            const label     = isNearest ? 'Nearest Feeder Zone' : 'Your Feeder Coverage Area';
+            const icon      = isNearest ? '📍' : '⚡';
+            const pill      = isNearest ? `~${esc(String(d.distance_km))} km away` : 'Inside zone';
+
+            div.innerHTML = `<div class="feeder-card ${cardClass}">
+                <div class="feeder-icon">${icon}</div>
+                <div class="feeder-body">
+                    <div class="feeder-lbl">${label}</div>
+                    <div class="feeder-name">${esc(d.feeder)}</div>
+                    <div class="feeder-meta">
+                        <span class="feeder-pill">⚡ ${pill}</span>
+                        <span class="feeder-pill">🗂️ Auto-routed ✓</span>
+                    </div>
+                </div></div>`;
+
+            if (d.is_active) {
+                strip.className = 'outage-status-strip outage-active';
+                strip.innerHTML = '⚠️ &nbsp;<span>A <strong>known active outage</strong> exists on '
+                    + esc(d.feeder) + '. Our crew is already working on it. '
+                    + 'Your report will still be recorded and linked to this incident.</span>';
+            }
+            srAnnounce(`Feeder detected: ${d.feeder}.`);
+        } else {
+            div.innerHTML = `<div class="feeder-card outside">
+                <div class="feeder-icon">🔍</div>
+                <div class="feeder-body">
+                    <div class="feeder-lbl">Feeder Zone</div>
+                    <div class="feeder-name">Outside mapped zones</div>
+                    <div class="feeder-note">Your report will be reviewed manually.</div>
+                </div></div>`;
+        }
+    } catch {
+        if (seq !== _feederReqSeq) return;
         div.innerHTML = `<div class="feeder-card outside">
             <div class="feeder-icon">⚠️</div>
             <div class="feeder-body">
@@ -1601,53 +1861,8 @@ async function _checkFeederNow(lat, lng) {
                 <div class="feeder-name">Temporarily unavailable</div>
                 <div class="feeder-note">Your report will still be accepted.</div>
             </div></div>`;
-        strip.className = 'outage-status-strip';
     }
 }
-
-function _renderFeederResult(d, div, strip) {
-
-        if (d.success && d.feeder) {
-        _currentFeeder = d.feeder;
-        const isNearest = d.method === 'nearest';
-        const cardClass = isNearest ? 'nearest' : 'inside';
-        const label     = isNearest ? 'Nearest Feeder Zone' : 'Your Feeder Coverage Area';
-        const icon      = isNearest ? '📍' : '⚡';
-        const pill      = isNearest ? `~${esc(String(d.distance_km))} km away` : 'Inside zone';
-
-        div.innerHTML = `<div class="feeder-card ${cardClass}">
-            <div class="feeder-icon">${icon}</div>
-            <div class="feeder-body">
-                <div class="feeder-lbl">${label}</div>
-                <div class="feeder-name">${esc(d.feeder)}</div>
-                <div class="feeder-meta">
-                    <span class="feeder-pill">⚡ ${pill}</span>
-                    <span class="feeder-pill">🗂️ Auto-routed ✓</span>
-                </div>
-            </div></div>`;
-
-        if (d.is_active) {
-            strip.className = 'outage-status-strip outage-active';
-            strip.innerHTML = '⚠️ &nbsp;<span>A <strong>known active outage</strong> exists on '
-                + esc(d.feeder) + '. Our crew is already working on it. '
-                + 'Your report will still be recorded and linked to this incident.</span>';
-        } else {
-            strip.className = 'outage-status-strip';
-        }
-
-        srAnnounce(`Feeder detected: ${d.feeder}.`);
-    } else {
-        div.innerHTML = `<div class="feeder-card outside">
-            <div class="feeder-icon">🔍</div>
-            <div class="feeder-body">
-                <div class="feeder-lbl">Feeder Zone</div>
-                <div class="feeder-name">Outside mapped zones</div>
-                <div class="feeder-note">Your report will be reviewed manually.</div>
-            </div></div>`;
-        strip.className = 'outage-status-strip';
-    }
-}
-
 
 // ═══════════════════════════════════════════════════════════════
 // FULLSCREEN MAP
@@ -1684,6 +1899,61 @@ function toggleMapFullscreen() {
     setTimeout(() => _map.invalidateSize(), 300);
 }
 
+// ═══════════════════════════════════════════════════════════════
+// BARANGAY DATA
+// ═══════════════════════════════════════════════════════════════
+const barangaysByTown = {
+    "Alimodian": ["Abang-abang","Agsing","Atabay","Ba-ong","Baguingin-Lanot","Bagsakan","Bagumbayan-Ilajas","Balabago","Ban-ag","Bancal","Binalud","Bugang","Buhay","Bulod","Cabacanan Proper","Cabacanan Rizal","Cagay","Coline","Coline-Dalag","Cunsad","Cuyad","Dalid","Dao","Gines","Ginomoy","Ingwan","Laylayan","Lico","Luan-luan","Malamboy-Bondolan","Malamhay","Mambawi","Manasa","Manduyog","Pajo","Pianda-an Norte","Pianda-an Sur","Poblacion","Punong","Quinaspan","Sinamay","Sulong","Taban-Manguining","Tabug","Tarug","Tugaslon","Ubodan","Ugbo","Ulay-Bugang","Ulay-Hinablan","Umingan"],
+    "Cabatuan": ["Acao","Amerang","Amurao","Anuang","Ayaman","Ayong","Bacan","Balabag","Baluyan","Banguit","Bulay","Cadoldolan","Cagban","Calawagan","Calayo","Duyan-Duyan","Gaub","Gines Interior","Gines Patag","Guibuangan Tigbauan","Inabasan","Inaca","Inaladan","Ingas","Ito Norte","Ito Sur","Janipaan Central","Janipaan Este","Janipaan Oeste","Janipaan Olo","Jelicuon Lusaya","Jelicuon Montinola","Lag-an","Leong","Lutac","Manguna","Maraguit","Morubuan","Pacatin","Pagotpot","Pamul-ogan","Pamuringao Proper","Pamuringao Garrido","Pungtod","Puyas","Salacay","Sulanga","Tabucan","Tacdangan","Talanghauan","Tigbauan Road","Tinio-an","Tiring","Tupol Central","Tupol Este","Tupol Oeste","Tuy-an","Zone I Pob. (Barangay 1)","Zone II Pob. (Barangay 2)","Zone III Pob. (Barangay 3)","Zone IV Pob. (Barangay 4)","Zone V Pob. (Barangay 5)","Zone VI Pob. (Barangay 6)","Zone VII Pob. (Barangay 7)","Zone VIII Pob. (Barangay 8)","Zone IX Pob. (Barangay 9)","Zone X Pob. (Barangay 10)","Zone XI Pob. (Barangay 11)"],
+    "Guimbal": ["Anono-o","Bacong","Bagumbayan Poblacion","Balantad-Carlos Fruto","Baras","Binanua-an","Bongol San Miguel","Bongol San Vicente","Bulad","Buluangan","Burgos-Gengos","Cabasi","Cabubugan","Calampitao","Camangahan","Generosa-Cristobal Colon","Gerona-Gimeno","Girado-Magsaysay","Gotera","Igcocolo","Iyasan","Libo-on Gonzales","Lubacan","Nahapay","Nalundan","Nanga","Nito-an Lupsag","Particion","Pescadores","Rizal-Tuguisan","Santa Rosa-Laguna","Sipitan-Badiang","Torreblanca-Blumentritt"],
+    "Igbaras": ["Alameda","Amorogtong","Anilawan","Bagacay","Bagacayan","Bagay","Balibagan","Barangay 1 Poblacion","Barangay 2 Poblacion","Barangay 3 Poblacion","Barangay 4 Poblacion","Barangay 5 Poblacion","Barangay 6 Poblacion","Barasan","Binanua-an","Boclod","Buenavista","Buga","Bugnay","Calampitao","Cale","Corucuan","Catiringan","Igcabugao","Igpigus","Igtalongon","Indaluyon","Jovellar","Kinagdan","Lab-on","Lacay Dol-Dol","Lumangan","Lutungan","Mantangon","Mulangan","Pasong","Passi","Pinaopawan","Riro-an","San Ambrosio","Santa Barbara","Signe","Tabiac","Talayatay","Taytay","Tigbanaba"],
+    "Leganes": ["M.V. Hechanova (Balabago)","Bigke","Buntatala","Cagamutan Norte","Cagamutan Sur","Calaboa","Camangay","Cari Major","Cari Minor","Gua-an","Guihaman","Guinobatan","Guintas","Lapayon","Nabitasan","Napnud","Poblacion","San Vicente"],
+    "Leon": ["Agboy Norte","Agboy Sur","Agta","Ambulong","Anonang","Apian","Avanzada","Awis","Ayabang","Ayubo","Bacolod","Baje","Banagan","Barangbang","Barasan","Bayag Norte","Bayag Sur","Binolbog","Biri Norte","Biri Sur","Bobon","Bucari","Buenavista","Buga","Bulad","Bulwang","Cabolo-an","Cabunga-an","Cabutongan","Cagay","Camandag","Camando","Cananaman","Capt. Fernando","Carara-an","Carolina","Cawilihan","Coyugan Norte","Coyugan Sur","Danao","Dorog","Dusacan","Gines","Gumboc","Igcadios","Ingay","Isian Norte","Isian Victoria","Jamog Gines","Lanag","Lang-og","Ligtos","Lonoc","Lampaya","Magcapay","Maliao","Malublub","Manampunay","Marirong","Mina","Mocol","Nagbangi","Nalbang","Odong-odong","Oluangan","Omambong","Paoy","Pandan","Panginman","Pepe","Poblacion","Paga","Salngan","Samlague","Siol Norte","Siol Sur","Tacuyong Norte","Tacuyong Sur","Tagsing","Talacuan","Ticuan","Tina-an Norte","Tina-an Sur","Tunguan","Tu-og"],
+    "Maasin": ["Abay","Abilay","AGROCEL Pob.","Amerang","Bagacay East","Bagacay West","Bug-ot","Bolo","Bulay","Buntalan","Burak","Cabangcalan","Cabatac","Caigon","Cananghan","Canawili","Dagami","Daja","Dalusan","DELCAR Pob.","Inabasan","Layog","Linagan Calsada","Linagan Tacas","Linab","MARI Pob.","Magsaysay","Mandog","Miapa","Nagba","Nasaka","Naslo-Bucao","Nasuli","Panalian","Piandaan East","Piandaan West","Pispis","Punong","Sinubsuban","Siwalo","Santa Rita","Subog","THTP Pob.","Tigbauan","Trangka","Tubang","Tulahong","Tuy-an East","Tuy-an West","Ubian"],
+    "Miag-ao": ["Agdum","Aguiauan","Alimodias","Awang","Oya-oy","Bacauan","Bacolod","Bagumbayan","Banbanan","Banga","Bangladan","Banuyao","Baraclayan","Bariri","Baybay Norte (Poblacion)","Baybay Sur (Poblacion)","Belen","Bolho (Poblacion)","Bolocaue","Buenavista Norte","Buenavista Sur","Bugtong Lumangan","Bugtong Naulid","Cabalaunan","Cabangcalan","Cabunotan","Cadoldolan","Cagbang","Caitib","Calagtangan","Calampitao","Cavite","Cawayanan","Cubay","Cubay Ubos","Dalije","Damilisan","Dawog","Diday","Dingle","Durog","Frantilla","Fundacion","Gines","Guibongan","Igbita","Igbugo","Igcabidio","Igcabito-on","Igcatambor","Igdalaquit","Igdulaca","Igpajo","Igpandan","Igpuro","Igpuro-Bariri","Igsoligue","Igtuba","Ilog-ilog","Indag-an","Kirayan Norte","Kirayan Sur","Kirayan Tacas","La Consolacion","Lacadon","Lanutan","Lumangan","Mabayan","Maduyo","Malagyan","Mambatad","Maninila","Maricolcol","Maringyan","Mat-y (Poblacion)","Matalngon","Naclub","Nam-o Norte","Nam-o Sur","Narat-an","Narorogan","Naulid","Olango","Ongyod","Onop","Oyungan","Palaca","Paro-on","Potrido","Pudpud","Pungtod Monteclaro","Pungtod Naulid","Sag-on","San Fernando","San Jose","San Rafael","Sapa (Miagao)","Saring","Sibucao","Taal","Tabunacan","Tacas (Poblacion)","Tambong","Tan-agan","Tatoy","Ticdalan","Tig-amaga","Tig-Apog-Apog","Tigbagacay","Tiglawa","Tigmalapad","Tigmarabo","To-og","Tugura-ao","Tumagboc","Ubos Ilawod (Poblacion)","Ubos Ilaya (Poblacion)","Valencia","Wayang"],
+    "Oton": ["Abilay Norte","Abilay Sur","Alegre","Batuan Ilaud","Batuan Ilaya","Bita Norte","Bita Sur","Botong","Buray","Cabanbanan","Cabolo-an Norte","Cabolo-an Sur","Cadinglian","Cagbang","Calam-isan","Galang","Lambuyao","Mambog","Pakiad","Poblacion East","Poblacion North","Poblacion South","Poblacion West","Pulo Maestra Vita","Rizal","Salngan","Sambaludan","San Antonio","San Nicolas","Santa Clara","Santa Monica","Santa Rita","Tagbac Norte","Tagbac Sur","Trapiche","Tuburan","Turog-Turog"],
+    "Pavia": ["Aganan","Amparo","Anilao","Balabag","Purok I (Poblacion)","Purok II (Poblacion)","Purok III (Poblacion)","Purok IV (Poblacion)","Cabugao Norte","Cabugao Sur","Jibao-an","Mali-ao","Pagsanga-an","Pal-agon","Pandac","Tigum","Ungka I","Ungka II"],
+    "San Joaquin": ["Amboyu-an","Andres Bonifacio","Antalon","Bad-as","Bagumbayan","Balabago","Baybay","Bayunan (Panday Oro)","Bolbogan","Bucaya","Bulho","Cadluman","Cadoldolan","Camaba-an","Camia","Cata-an","Crossing Dapuyan","Cubay","Cumarascas","Dacdacanan","Danawan","Doldol","Dongoc","Escalantera","Ginot-an","Guibongan Bayunan","Huna","Igbaje","Igbangcal","Igbinangon","Igburi","Igcabutong","Igcadlum","Igcaphang","Igcaratong","Igcondao","Igcores","Igdagmay","Igdomingding","Iglilico","Igpayong","Jawod","Langca","Languanan","Lawigan","Lomboy","Lomboyan (Santa Ana)","Lopez Vito","Mabini Norte","Mabini Sur","Manhara","Maninila","Masagud","Matambog","Mayunoc","Montinola","Nadsadan","Nagquirisan","Nagsipit","New Gumawan","Panatan","Pitogo","Purok 1 (Poblacion)","Purok 2 (Poblacion)","Purok 3 (Poblacion)","Purok 4 (Poblacion)","Purok 5 (Poblacion)","Qui-anan","Roma","San Luis","San Mateo Norte","San Mateo Sur","Santa Rita","Santiago","Sinogbuhan","Siwaragan","Talagutac","Tapikan","Taslan","Tiglawa","Tiolas","To-og","Torocadan","Ulay"],
+    "San Miguel": ["Barangay 1 Poblacion","Barangay 2 Poblacion","Barangay 3 Poblacion","Barangay 4 Poblacion","Barangay 5 Poblacion","Barangay 6 Poblacion","Barangay 7 Poblacion","Barangay 8 Poblacion","Barangay 9 Poblacion","Barangay 10 Poblacion","Barangay 11 Poblacion","Barangay 12 Poblacion","Barangay 13 Poblacion","Barangay 14 Poblacion","Barangay 15 Poblacion","Barangay 16 Poblacion","Consolacion","Igtambo","San Antonio","San Jose","Santa Cruz","Santa Teresa","Santo Angel","Santo Nino"],
+    "Sta. Barbara": ["Agusipan","Agutayan","Bagumbayan","Balabag","Balibagan Este","Balibagan Oeste","Ban-ag","Bantay","Barangay Zone I (Poblacion)","Barangay Zone II (Poblacion)","Barangay Zone III (Poblacion)","Barangay Zone IV (Poblacion)","Barangay Zone V (Poblacion)","Barangay Zone VI (Poblacion)","Barasan Este","Barasan Oeste","Binangkilan","Bitaog-Taytay","Bolong Este","Bolong Oeste","Buayahon","Buyo","Cabugao Norte","Cabugao Sur","Cadagmayan Norte","Cadagmayan Sur","Cafe","Calaboa Este","Calaboa Oeste","Camambugan","Canipayan","Conaynay","Daga","Dalid","Duyan-Duyan","Gen. Martin T. Delgado","Guno","Inangayan","Jibao-an","Lacadon","Lanag","Lupa","Magancina","Malawog","Mambuyo","Manhayang","Miraga-Guibuangan","Nasugban","Omambog","Pal-Agon","Pungsod","San Sebastian","Sangcate","Tagsing","Talanghauan","Talongadian","Tigtig","Tungay","Tuburan","Tugas"],
+    "Tigbauan": ["Alupidian","Atabayan","Bagacay","Baguingin","Bagumbayan","Bangkal","Bantud","Barangay 1 (Pob.)","Barangay 2 (Pob.)","Barangay 3 (Pob.)","Barangay 4 (Pob.)","Barangay 5 (Pob.)","Barangay 6 (Pob.)","Barangay 7 (Pob.)","Barangay 8 (Pob.)","Barangay 9 (Pob.)","Barosong","Barroc","Bayuco","Binaliuan Mayor","Binaliuan Menor","Bitas","Buenavista","Bugasongan","Buyu-an","Canabuan","Cansilayan","Cordova Norte","Cordova Sur","Danao","Dapdap","Dorong-an","Guisian","Isawan","Isian","Jamog","Lanag","Linobayan","Lubog","Nagba","Namocon","Napnapan Norte","Napnapan Sur","Olo Barroc","Parara Norte","Parara Sur","San Rafael","Sermon","Sipitan","Supa","Tan Pael","Taro"],
+    "Tubungan": ["Adgao","Ago","Ambarihon","Ayubo","Bacan","Badiang","Bagunanay","Balicua","Bantayanan","Batga","Bato","Bikil","Boloc","Bondoc","Borong","Buenavista","Cadabdab","Daga-ay","Desposorio","Igdampog Norte","Igdampog Sur","Igpaho","Igtuble","Ingay","Isauan","Jolason","Jona","La-ag","Lanag Norte","Lanag Sur","Male","Mayang","Molina","Morcillas","Nagba","Navillan","Pinaopalan","San Jose","Sibucauan","Singon","Tabat","Tagpu-an","Talento","Teniente Benito","Victoria","Zone I Pob.","Zone II Pob.","Zone III Pob."]
+};
+
+// ═══════════════════════════════════════════════════════════════
+// BARANGAY CENTROIDS
+// ═══════════════════════════════════════════════════════════════
+const barangayCentroids = {
+    "Alimodian": { "Abang-abang":[10.8600193,122.3684737],"Agsing":[10.8306069,122.3972552],"Atabay":[10.8695282,122.4010157],"Ba-ong":[10.8360009,122.3856214],"Bagsakan":[10.9135393,122.3421602],"Baguingin-Lanot":[10.7801206,122.4253015],"Bagumbayan-Ilajas":[10.8355612,122.4289241],"Balabago":[10.8037776,122.4312193],"Ban-ag":[10.8281214,122.4574487],"Bancal":[10.7891735,122.4313270],"Binalud":[10.7951267,122.4244335],"Bugang":[10.9212052,122.3278204],"Buhay":[10.7838739,122.4377776],"Bulod":[10.8304117,122.4431119],"Cabacanan Proper":[10.9092561,122.3011860],"Cabacanan Rizal":[10.9093762,122.2929895],"Cagay":[10.8523386,122.4016282],"Coline":[10.8184542,122.4560918],"Coline-Dalag":[10.8088946,122.4610604],"Cunsad":[10.8706149,122.3520115],"Cuyad":[10.8334729,122.4073481],"Dalid":[10.8569471,122.4127880],"Dao":[10.9085960,122.3143671],"Gines":[10.8963585,122.3478221],"Ginomoy":[10.8431557,122.4148551],"Ingwan":[10.8434181,122.3911249],"Laylayan":[10.8942441,122.3751616],"Lico":[10.9270145,122.3095973],"Luan-luan":[10.8476081,122.3764080],"Malamboy-Bondolan":[10.8832595,122.3571098],"Malamhay":[10.8834696,122.3334053],"Mambawi":[10.8440183,122.4410794],"Manasa":[10.9106248,122.2885804],"Manduyog":[10.8365724,122.4481957],"Pajo":[10.8672479,122.3853042],"Pianda-an Norte":[10.8651934,122.4133969],"Pianda-an Sur":[10.8495877,122.4233386],"Poblacion":[10.8167414,122.4323243],"Punong":[10.9093233,122.3591081],"Quinaspan":[10.8208439,122.4109742],"Sinamay":[10.8042970,122.4495200],"Sulong":[10.7964162,122.4473437],"Taban-Manguining":[10.8133076,122.4410930],"Tabug":[10.8971843,122.2949006],"Tarug":[10.9004838,122.3273237],"Tugaslon":[10.8868292,122.3191423],"Ubodan":[10.8299233,122.4185079],"Ugbo":[10.8771486,122.3697859],"Ulay-Bugang":[10.8038689,122.4185479],"Ulay-Hinablan":[10.8147834,122.4209849],"Umingan":[10.9126568,122.3230057] },
+    "Cabatuan": {
+        "Acao":[10.8449953,122.4614165],"Amerang":[10.8827677,122.4732542],"Amurao":[10.8925960,122.4683188],"Anuang":[10.8946271,122.5165400],"Ayaman":[10.8869539,122.4872751],"Ayong":[10.8936419,122.4999378],"Bacan":[10.8834059,122.4602666],"Balabag":[10.9243803,122.5316402],"Baluyan":[10.9130168,122.4856947],"Banguit":[10.8712832,122.4935658],"Bulay":[10.9271742,122.4803185],"Cadoldolan":[10.8713976,122.5263108],"Cagban":[10.8823902,122.5354032],"Calawagan":[10.9153851,122.5145602],"Calayo":[10.8490807,122.4778741],"Duyan-Duyan":[10.8338371,122.4912848],"Gaub":[10.8470012,122.4918934],"Gines Interior":[10.9237356,122.5042373],"Gines Patag":[10.9347136,122.4905677],"Guibuangan Tigbauan":[10.8656748,122.5151715],"Inabasan":[10.8597971,122.4499323],"Inaca":[10.8515353,122.4537995],"Inaladan":[10.9024729,122.5238560],"Ingas":[10.9010657,122.4741586],"Ito Norte":[10.8419463,122.4726567],"Ito Sur":[10.8336259,122.4656822],"Janipaan Central":[10.9193267,122.5449362],"Janipaan Este":[10.9102271,122.5493321],"Janipaan Oeste":[10.9225079,122.5218614],"Janipaan Olo":[10.9283319,122.5116715],"Jelicuon Lusaya":[10.9101596,122.5270544],"Jelicuon Montinola":[10.8980052,122.5396113],"Lag-an":[10.8661924,122.4559042],"Leong":[10.8826258,122.4974905],"Lutac":[10.8797098,122.5076840],"Manguna":[10.8266430,122.4822281],"Maraguit":[10.8886978,122.5089818],"Morubuan":[10.8713222,122.4507292],"Pacatin":[10.9149541,122.5340428],"Pagotpot":[10.9189929,122.4961694],"Pamul-ogan":[10.8645358,122.4884482],"Pamuringao Proper":[10.8762431,122.4544575],"Pamuringao Garrido":[10.8768475,122.4635916],"Pungtod":[10.8674064,122.5031755],"Puyas":[10.8818092,122.5227927],"Salacay":[10.8719507,122.4769825],"Sulanga":[10.9077669,122.5032225],"Tabucan":[10.8571924,122.4978800],"Tacdangan":[10.8995320,122.4886429],"Talanghauan":[10.8411926,122.5085174],"Tigbauan Road":[10.9242193,122.4891424],"Tinio-an":[10.8570903,122.4827223],"Tiring":[10.8510379,122.5047979],"Tupol Central":[10.8621181,122.4679601],"Tupol Este":[10.8602473,122.4744780],"Tupol Oeste":[10.8679979,122.4628472],"Tuy-an":[10.9140283,122.4747513],
+        // ── Zone poblacion barangays — centroid at Cabatuan town hall area ──
+        "Zone I Pob. (Barangay 1)":[10.8736783,122.4861295],
+        "Zone II Pob. (Barangay 2)":[10.8761845,122.4874853],
+        "Zone III Pob. (Barangay 3)":[10.8768043,122.4829309],
+        "Zone IV Pob. (Barangay 4)":[10.8786626,122.4840284],
+        "Zone V Pob. (Barangay 5)":[10.8801286,122.4862715],
+        "Zone VI Pob. (Barangay 6)":[10.8824261,122.4837874],
+        "Zone VII Pob. (Barangay 7)":[10.8813965,122.4824940],
+        "Zone VIII Pob. (Barangay 8)":[10.8804290,122.4817055],
+        "Zone IX Pob. (Barangay 9)":[10.8781850,122.4801611],
+        "Zone X Pob. (Barangay 10)":[10.8801510,122.4776732],
+        "Zone XI Pob. (Barangay 11)":[10.8826186,122.4804888]
+    },
+    "Guimbal":{"Anono-o":[10.6746822,122.2996159],"Bacong":[10.7085185,122.3013669],"Bagumbayan Poblacion":[10.6616285,122.3176135],"Balantad-Carlos Fruto":[10.6741866,122.3283768],"Baras":[10.6634138,122.2995320],"Binanua-an":[10.7191148,122.3123500],"Bongol San Miguel":[10.7268402,122.3045433],"Bongol San Vicente":[10.6589887,122.3142479],"Bulad":[10.6794732,122.2940753],"Buluangan":[10.7402658,122.3068197],"Burgos-Gengos":[10.6641730,122.3188822],"Cabasi":[10.6595756,122.3042433],"Cabubugan":[10.6646128,122.2946861],"Calampitao":[10.6662213,122.2824097],"Camangahan":[10.7115272,122.3156507],"Generosa-Cristobal Colon":[10.6618750,122.3274416],"Gerona-Gimeno":[10.6599825,122.3215285],"Girado-Magsaysay":[10.6645880,122.3226102],"Gotera":[10.6641716,122.3211970],"Igcocolo":[10.6936073,122.3226351],"Iyasan":[10.6756226,122.2843139],"Libo-on Gonzales":[10.6625656,122.3216515],"Lubacan":[10.6843246,122.3024248],"Nahapay":[10.7260200,122.3195540],"Nalundan":[10.6654279,122.2893179],"Nanga":[10.6785139,122.3381040],"Nito-an Lupsag":[10.6874170,122.2936980],"Particion":[10.6689127,122.3093089],"Pescadores":[10.6587328,122.3253163],"Rizal-Tuguisan":[10.6648366,122.3270557],"Santa Rosa-Laguna":[10.6595315,122.3097714],"Sipitan-Badiang":[10.6851594,122.3109260],"Torreblanca-Blumentritt":[10.6601856,122.3237888]},
+    "Igbaras":{"Alameda":[10.7573900,122.2747782],"Amorogtong":[10.7489193,122.2901251],"Anilawan":[10.7442526,122.2589695],"Bagacay":[10.7676798,122.2297893],"Bagacayan":[10.6983449,122.2506354],"Bagay":[10.7394849,122.2131525],"Balibagan":[10.7288083,122.2924881],"Barangay 1 Poblacion":[10.7071228,122.2695769],"Barangay 2 Poblacion":[10.7094773,122.2659526],"Barangay 3 Poblacion":[10.7113427,122.2634092],"Barangay 4 Poblacion":[10.7120136,122.2612518],"Barangay 5 Poblacion":[10.7127055,122.2595376],"Barangay 6 Poblacion":[10.7224503,122.2578886],"Barasan":[10.7401519,122.2480549],"Binanua-an":[10.7590977,122.2406672],"Boclod":[10.7404026,122.2970397],"Buenavista":[10.7163613,122.2236938],"Buga":[10.7291246,122.2786735],"Bugnay":[10.7498734,122.2404160],"Calampitao":[10.6850024,122.2698542],"Cale":[10.7558454,122.2518746],"Catiringan":[10.7082296,122.2906636],"Corucuan":[10.7497374,122.2234767],"Igcabugao":[10.8019224,122.2316873],"Igpigus":[10.7803577,122.2590513],"Igtalongon":[10.7493913,122.2338316],"Indaluyon":[10.7645127,122.2611501],"Jovellar":[10.6973222,122.2820728],"Kinagdan":[10.7330574,122.2387535],"Lab-on":[10.7500701,122.2173148],"Lacay Dol-Dol":[10.7772517,122.2710327],"Lumangan":[10.7134006,122.2331962],"Lutungan":[10.6951247,122.2607118],"Mantangon":[10.7708147,122.2757123],"Mulangan":[10.7290375,122.2285671],"Pasong":[10.7199691,122.2336070],"Passi":[10.7901468,122.2097975],"Pinaopawan":[10.7626684,122.2313105],"Riro-an":[10.7440746,122.2713371],"San Ambrosio":[10.7156731,122.2481733],"Santa Barbara":[10.6996036,122.2406189],"Signe":[10.7351378,122.2637310],"Tabiac":[10.7659343,122.2847024],"Talayatay":[10.7066507,122.2332240],"Taytay":[10.7605883,122.2821305],"Tigbanaba":[10.7672254,122.2008002]},
+    "Leganes":{"M.V. Hechanova (Balabago)":[10.7729202,122.6036685],"Bigke":[10.7684269,122.5989252],"Buntatala":[10.7785316,122.5804695],"Cagamutan Norte":[10.8055256,122.5979655],"Cagamutan Sur":[10.7953976,122.5891854],"Calaboa":[10.8076662,122.5874737],"Camangay":[10.7643811,122.5944863],"Cari Major":[10.8021853,122.6099442],"Cari Minor":[10.7913796,122.5990268],"Gua-an":[10.7822109,122.6171847],"Guihaman":[10.7839669,122.5812937],"Guinobatan":[10.7832827,122.5972002],"Guintas":[10.7728589,122.5919968],"Lapayon":[10.7972544,122.5680174],"Nabitasan":[10.7867247,122.6306949],"Napnud":[10.7801758,122.6058948],"Poblacion":[10.7874454,122.5865531],"San Vicente":[10.7958341,122.5798433]},
+    "Leon":{"Agboy Norte":[10.7734543,122.4160912],"Agboy Sur":[10.7643693,122.4085054],"Agta":[10.8289127,122.3398818],"Ambulong":[10.7779143,122.3409460],"Anonang":[10.7691234,122.3994966],"Apian":[10.8207731,122.3477759],"Avanzada":[10.7765841,122.3491192],"Awis":[10.8072698,122.3764606],"Ayabang":[10.8606985,122.3343734],"Ayubo":[10.7901268,122.3333126],"Bacolod":[10.8752193,122.2997235],"Baje":[10.7972206,122.3428545],"Banagan":[10.8738763,122.3366594],"Barangbang":[10.8152188,122.3306782],"Barasan":[10.7879098,122.3717957],"Bayag Norte":[10.7719167,122.3534826],"Bayag Sur":[10.7674820,122.3484126],"Binolbog":[10.7831442,122.3362751],"Biri Norte":[10.7604954,122.3798685],"Biri Sur":[10.7594099,122.3919500],"Bobon":[10.8917070,122.2900040],"Bucari":[10.8716950,122.2835200],"Buenavista":[10.7579792,122.4116973],"Buga":[10.8144615,122.3890167],"Bulad":[10.8115754,122.3730576],"Bulwang":[10.8859770,122.2963336],"Cabolo-an":[10.8760972,122.3172348],"Cabunga-an":[10.8814736,122.3068805],"Cabutongan":[10.7824651,122.3516105],"Cagay":[10.8626970,122.2727076],"Camandag":[10.8869502,122.2764550],"Camando":[10.7964019,122.3821682],"Cananaman":[10.7934141,122.3367222],"Capt. Fernando":[10.8022414,122.3694930],"Carara-an":[10.8454969,122.3515464],"Carolina":[10.7858615,122.3512212],"Cawilihan":[10.8410772,122.3092504],"Coyugan Norte":[10.8251205,122.3523512],"Coyugan Sur":[10.8142605,122.3405064],"Danao":[10.8542895,122.2551558],"Dorog":[10.8383545,122.3283778],"Dusacan":[10.8333226,122.3512776],"Gines":[10.8555355,122.3437957],"Gumboc":[10.7991018,122.3544980],"Igcadios":[10.8450518,122.3400154],"Ingay":[10.8424834,122.2929221],"Isian Norte":[10.7676241,122.3696308],"Isian Victoria":[10.7834066,122.3592366],"Jamog Gines":[10.7678792,122.3584240],"Lampaya":[10.8696953,122.3275680],"Lanag":[10.8013730,122.4028676],"Lang-og":[10.7953108,122.3633226],"Ligtos":[10.8333105,122.3614710],"Lonoc":[10.7833704,122.3435416],"Magcapay":[10.8162177,122.3640559],"Maliao":[10.8628193,122.3188438],"Malublub":[10.8454174,122.3634338],"Manampunay":[10.8063140,122.3323628],"Marirong":[10.8268737,122.3230643],"Mina":[10.7707534,122.3425220],"Mocol":[10.8091255,122.3458805],"Nagbangi":[10.7878944,122.3985731],"Nalbang":[10.8213230,122.3339635],"Odong-odong":[10.7891736,122.3540009],"Oluangan":[10.8236610,122.3697382],"Omambong":[10.7536331,122.3966938],"Paga":[10.7994424,122.3278540],"Pandan":[10.7607568,122.4027456],"Panginman":[10.7775960,122.3778903],"Paoy":[10.8021813,122.3803638],"Pepe":[10.7879084,122.3430542],"Poblacion":[10.7853203,122.3864766],"Salngan":[10.7754963,122.3626644],"Samlague":[10.8114777,122.3560891],"Siol Norte":[10.7826688,122.4124302],"Siol Sur":[10.7767048,122.4076031],"Tacuyong Norte":[10.8184892,122.3231300],"Tacuyong Sur":[10.8007454,122.3484240],"Tagsing":[10.8502565,122.3211083],"Talacuan":[10.7706401,122.3868413],"Ticuan":[10.8612163,122.3505890],"Tina-an Norte":[10.8314432,122.3793539],"Tina-an Sur":[10.7776291,122.3717677],"Tu-og":[10.7900651,122.4103019],"Tunguan":[10.8683410,122.3397419]},
+    "Maasin":{"Abay":[10.9013547,122.4165503],"Abilay":[10.9272759,122.4270442],"AGROCEL Pob.":[10.8924105,122.4331126],"Amerang":[10.9076117,122.4643358],"Bagacay East":[10.8884004,122.4467414],"Bagacay West":[10.8898676,122.4437514],"Bug-ot":[10.9450483,122.4428901],"Bolo":[10.9255440,122.4093157],"Bulay":[10.9397342,122.4770610],"Buntalan":[10.8910036,122.4127172],"Burak":[10.9448677,122.4651657],"Cabangcalan":[10.9360329,122.3963377],"Cabatac":[10.8947292,122.4412088],"Caigon":[10.8983102,122.4554785],"Cananghan":[10.9089424,122.4565987],"Canawili":[10.9368767,122.4548184],"Dagami":[10.9487365,122.3865616],"Daja":[10.8952325,122.4120678],"Dalusan":[10.9413987,122.4530827],"DELCAR Pob.":[10.8875312,122.4341421],"Inabasan":[10.8654119,122.4383197],"Layog":[10.9442105,122.4149120],"Linagan Calsada":[10.8920031,122.4260940],"Linagan Tacas":[10.8835639,122.4165038],"Linab":[10.8786430,122.3961924],"MARI Pob.":[10.8887908,122.4325618],"Magsaysay":[10.8796658,122.4285574],"Mandog":[10.8882723,122.4527315],"Miapa":[10.9031377,122.4609649],"Nagba":[10.9131308,122.4200000],"Nasaka":[10.8775321,122.4421299],"Naslo-Bucao":[10.8891350,122.4391079],"Nasuli":[10.9380555,122.4307700],"Panalian":[10.9585816,122.4028706],"Piandaan East":[10.8642698,122.4223502],"Piandaan West":[10.8724623,122.4166912],"Pispis":[10.9125245,122.4463552],"Punong":[10.9104330,122.4017104],"Santa Rita":[10.8834099,122.4022246],"Sinubsuban":[10.9004432,122.4250085],"Siwalo":[10.8568330,122.4309837],"Subog":[10.9538155,122.4235080],"THTP Pob.":[10.8923188,122.4351398],"Tigbauan":[10.9303046,122.4664799],"Trangka":[10.9402812,122.3574867],"Tubang":[10.9080151,122.4337658],"Tulahong":[10.9282145,122.4453814],"Tuy-an East":[10.9185110,122.4615806],"Tuy-an West":[10.9370159,122.4387408],"Ubian":[10.9535812,122.3976633]},
+    "Miag-ao":{"Agdum":[10.7223490,122.2005398],"Aguiauan":[10.6824976,122.2056106],"Alimodias":[10.7139391,122.1344380],"Awang":[10.6556437,122.1500975],"Oya-oy":[10.7231307,122.2098716],"Bacauan":[10.6481596,122.2149467],"Bacolod":[10.6778239,122.1654831],"Bagumbayan":[10.6549461,122.2333417],"Banbanan":[10.6853825,122.2070573],"Banga":[10.6965778,122.2297070],"Bangladan":[10.6765198,122.2630755],"Banuyao":[10.6558520,122.2550183],"Baraclayan":[10.6798725,122.2375795],"Bariri":[10.6967536,122.1838384],"Baybay Norte (Poblacion)":[10.6396084,122.2396475],"Baybay Sur (Poblacion)":[10.6394843,122.2360501],"Belen":[10.7040211,122.1952664],"Bolho (Poblacion)":[10.6408912,122.2341946],"Bolocaue":[10.6914473,122.2094374],"Buenavista Norte":[10.6525314,122.1840300],"Buenavista Sur":[10.6368888,122.1568387],"Bugtong Lumangan":[10.6627975,122.2034326],"Bugtong Naulid":[10.6764304,122.2483811],"Cabalaunan":[10.7236667,122.1437949],"Cabangcalan":[10.6783970,122.1804452],"Cabunotan":[10.6897477,122.1572414],"Cadoldolan":[10.7179641,122.1622687],"Cagbang":[10.6882399,122.2006821],"Caitib":[10.6842202,122.2451685],"Calagtangan":[10.6664188,122.2752319],"Calampitao":[10.6664188,122.2752319],"Cavite":[10.6948926,122.2175806],"Cawayanan":[10.6698919,122.1705788],"Cubay":[10.6786738,122.2126321],"Cubay Ubos":[10.6803808,122.2192830],"Dalije":[10.6910463,122.1259908],"Damilisan":[10.6326854,122.1956264],"Dawog":[10.6792497,122.2283468],"Diday":[10.6729156,122.1973986],"Dingle":[10.6598471,122.2688348],"Durog":[10.6659995,122.2360323],"Frantilla":[10.6963354,122.1999992],"Fundacion":[10.6396465,122.1850492],"Gines":[10.6608208,122.2721526],"Guibongan":[10.6379460,122.2468801],"Igbita":[10.7090043,122.1782759],"Igbugo":[10.6780000,122.1900000],"Igcabidio":[10.6456058,122.1810152],"Igcabito-on":[10.6704536,122.1531584],"Igcatambor":[10.6475078,122.1491127],"Igdalaquit":[10.6840000,122.2140000],"Igdulaca":[10.6310649,122.1714075],"Igpajo":[10.6588292,122.1961361],"Igpandan":[10.6790555,122.1573502],"Igpuro":[10.6519056,122.2393580],"Igpuro-Bariri":[10.6886477,122.1794599],"Igsoligue":[10.6616739,122.1530835],"Igtuba":[10.6441658,122.2433573],"Ilog-ilog":[10.6458012,122.1671577],"Indag-an":[10.6682517,122.2212575],"Kirayan Norte":[10.6500863,122.2525217],"Kirayan Sur":[10.6434792,122.2499974],"Kirayan Tacas":[10.6569672,122.2449404],"La Consolacion":[10.7002857,122.1757022],"Lacadon":[10.6259140,122.1579655],"Lanutan":[10.6402524,122.1733159],"Lumangan":[10.6500000,122.2200000],"Mabayan":[10.7224906,122.1927290],"Maduyo":[10.7126222,122.2116107],"Malagyan":[10.6599882,122.2246539],"Mambatad":[10.6431470,122.2242535],"Maninila":[10.6568345,122.2649760],"Maricolcol":[10.6885165,122.2339558],"Maringyan":[10.6226202,122.1778306],"Mat-y (Poblacion)":[10.6515726,122.2256030],"Matalngon":[10.7133157,122.1690836],"Naclub":[10.6666556,122.1832351],"Nam-o Norte":[10.6581264,122.1684901],"Nam-o Sur":[10.6475753,122.1769714],"Narat-an":[10.6162819,122.1687236],"Narorogan":[10.6502203,122.1599312],"Naulid":[10.6556241,122.2598825],"Olango":[10.6978204,122.1538354],"Ongyod":[10.7412272,122.1754680],"Onop":[10.7349333,122.1550590],"Oyungan":[10.6306729,122.1824607],"Palaca":[10.6535716,122.1918325],"Paro-on":[10.6620275,122.2119734],"Potrido":[10.6356188,122.1902048],"Pudpud":[10.6946390,122.1693131],"Pungtod Monteclaro":[10.6912510,122.2197476],"Pungtod Naulid":[10.6699117,122.2492653],"Sag-on":[10.6982000,122.1934000],"San Fernando":[10.6538851,122.1744941],"San Jose":[10.7099711,122.1975097],"San Rafael":[10.6218053,122.1715392],"Sapa (Miagao)":[10.6391091,122.2278394],"Saring":[10.6971015,122.1908284],"Sibucao":[10.6899799,122.2235775],"Taal":[10.6972899,122.2141547],"Tabunacan":[10.6397891,122.1945011],"Tacas (Poblacion)":[10.6438392,122.2335361],"Tambong":[10.6786900,122.2062020],"Tan-agan":[10.6748028,122.2157937],"Tatoy":[10.6667874,122.2636490],"Ticdalan":[10.6871922,122.1873423],"Tig-amaga":[10.7075842,122.1594403],"Tig-Apog-Apog":[10.6868105,122.1668595],"Tigbagacay":[10.6818835,122.1747969],"Tiglawa":[10.7052040,122.2213063],"Tigmalapad":[10.7148772,122.1826715],"Tigmarabo":[10.7448880,122.1952090],"To-og":[10.7243609,122.1724155],"Tugura-ao":[10.6460781,122.2032959],"Tumagboc":[10.6852716,122.1932247],"Ubos Ilawod (Poblacion)":[10.6449880,122.2380276],"Ubos Ilaya (Poblacion)":[10.6476282,122.2349667],"Valencia":[10.6661274,122.2555036],"Wayang":[10.6995785,122.2069799]},
+    "Oton":{"Abilay Norte":[10.7456,122.4945],"Abilay Sur":[10.7367,122.4989],"Alegre":[10.7094,122.4572],"Batuan Ilaud":[10.7011,122.4834],"Batuan Ilaya":[10.7078,122.4812],"Bita Norte":[10.7255,122.4412],"Bita Sur":[10.7188,122.4434],"Botong":[10.6888,122.4912],"Buray":[10.6912,122.4856],"Cabanbanan":[10.7130,122.4680],"Cabolo-an Norte":[10.7220,122.4760],"Cabolo-an Sur":[10.7155,122.4722],"Cadinglian":[10.6822,122.4645],"Cagbang":[10.7299,122.5112],"Calam-isan":[10.6960,122.4530],"Galang":[10.7288,122.4288],"Lambuyao":[10.6712,122.4488],"Mambog":[10.6922,122.5022],"Pakiad":[10.6788,122.4678],"Poblacion East":[10.6952,122.4780],"Poblacion North":[10.6968,122.4762],"Poblacion South":[10.6935,122.4758],"Poblacion West":[10.6950,122.4740],"Pulo Maestra Vita":[10.6812,122.4312],"Rizal":[10.6994,122.4634],"Salngan":[10.7044,122.4456],"Sambaludan":[10.7511,122.4489],"San Antonio":[10.7122,122.4978],"San Nicolas":[10.6854,122.4712],"Santa Clara":[10.7144,122.5167],"Santa Monica":[10.7033,122.4888],"Santa Rita":[10.6944,122.4512],"Tagbac Norte":[10.7344,122.4488],"Tagbac Sur":[10.7264,122.4510],"Trapiche":[10.6812,122.4412],"Tuburan":[10.7111,122.4211],"Turog-Turog":[10.7444,122.4767]},
+    "Pavia":{"Aganan":[10.7680676,122.5343586],"Amparo":[10.7799616,122.5246616],"Anilao":[10.7699434,122.5476735],"Balabag":[10.7641215,122.5230688],"Cabugao Norte":[10.7902541,122.5495913],"Cabugao Sur":[10.7900641,122.5395290],"Jibao-an":[10.7532274,122.5126916],"Mali-ao":[10.7858830,122.5350491],"Pagsanga-an":[10.7694863,122.5594810],"Pal-agon":[10.7765153,122.5321230],"Pandac":[10.7453114,122.5280511],"Purok I (Poblacion)":[10.7816015,122.5433812],"Purok II (Poblacion)":[10.7794674,122.5412704],"Purok III (Poblacion)":[10.7747328,122.5448713],"Purok IV (Poblacion)":[10.7723088,122.5402589],"Tigum":[10.7808195,122.5575496],"Ungka I":[10.7625698,122.5416188],"Ungka II":[10.7538390,122.5375218]},
+    "San Joaquin":{"Purok 1 (Poblacion)":[10.5900,122.1317],"Purok 2 (Poblacion)":[10.5906,122.1323],"Purok 3 (Poblacion)":[10.5912,122.1329],"Purok 4 (Poblacion)":[10.5918,122.1335],"Purok 5 (Poblacion)":[10.5894,122.1311],"Amboyu-an":[10.5730,122.1440],"Andres Bonifacio":[10.5710,122.1420],"Antalon":[10.5690,122.1400],"Bad-as":[10.5670,122.1380],"Bagumbayan":[10.5920,122.1370],"Balabago":[10.5650,122.1360],"Baybay":[10.5940,122.1390],"Bayunan (Panday Oro)":[10.5630,122.1340],"Bolbogan":[10.5960,122.1410],"Bucaya":[10.5980,122.1430],"Bulho":[10.5610,122.1320],"Cadluman":[10.5590,122.1300],"Cadoldolan":[10.6000,122.1450],"Camaba-an":[10.6020,122.1470],"Camia":[10.5570,122.1280],"Cata-an":[10.5550,122.1260],"Crossing Dapuyan":[10.6040,122.1490],"Cubay":[10.5530,122.1240],"Cumarascas":[10.6060,122.1510],"Dacdacanan":[10.5510,122.1220],"Danawan":[10.6080,122.1530],"Doldol":[10.5490,122.1200],"Dongoc":[10.6100,122.1550],"Escalantera":[10.5470,122.1180],"Ginot-an":[10.5450,122.1160],"Guibongan Bayunan":[10.6120,122.1570],"Huna":[10.5430,122.1140],"Igbaje":[10.6140,122.1590],"Igbangcal":[10.5410,122.1120],"Igbinangon":[10.6160,122.1610],"Igburi":[10.5390,122.1100],"Igcabutong":[10.6180,122.1630],"Igcadlum":[10.5370,122.1080],"Igcaphang":[10.6200,122.1650],"Igcaratong":[10.5350,122.1060],"Igcondao":[10.6220,122.1670],"Igcores":[10.5330,122.1040],"Igdagmay":[10.6240,122.1690],"Igdomingding":[10.5310,122.1020],"Iglilico":[10.6260,122.1710],"Igpayong":[10.5290,122.1000],"Jawod":[10.6280,122.1730],"Langca":[10.5270,122.0980],"Languanan":[10.6300,122.1750],"Lawigan":[10.5250,122.0960],"Lomboy":[10.6320,122.1770],"Lomboyan (Santa Ana)":[10.5230,122.0940],"Lopez Vito":[10.6340,122.1790],"Mabini Norte":[10.5210,122.0920],"Mabini Sur":[10.5190,122.0900],"Manhara":[10.6360,122.1810],"Maninila":[10.5170,122.0880],"Masagud":[10.6380,122.1830],"Matambog":[10.5150,122.0860],"Mayunoc":[10.6400,122.1850],"Montinola":[10.5130,122.0840],"Nadsadan":[10.5110,122.0820],"Nagquirisan":[10.6420,122.1870],"Nagsipit":[10.6440,122.1890],"New Gumawan":[10.5090,122.0800],"Panatan":[10.6460,122.1910],"Pitogo":[10.5070,122.0780],"Qui-anan":[10.6480,122.1930],"Roma":[10.5050,122.0760],"San Luis":[10.6500,122.1950],"San Mateo Norte":[10.5030,122.0740],"San Mateo Sur":[10.5010,122.0720],"Santa Rita":[10.6520,122.1970],"Santiago":[10.4990,122.0700],"Sinogbuhan":[10.6540,122.1990],"Siwaragan":[10.4970,122.0680],"Talagutac":[10.6560,122.2010],"Tapikan":[10.4950,122.0660],"Taslan":[10.6580,122.2030],"Tiglawa":[10.4930,122.0640],"Tiolas":[10.6600,122.2050],"To-og":[10.4910,122.0620],"Torocadan":[10.6620,122.2070],"Ulay":[10.4890,122.0600]},
+    "San Miguel":{"Barangay 1 Poblacion":[10.7737086,122.4752701],"Barangay 2 Poblacion":[10.7801707,122.4761344],"Barangay 3 Poblacion":[10.7796838,122.4745043],"Barangay 4 Poblacion":[10.7810347,122.4801179],"Barangay 5 Poblacion":[10.7830377,122.4750161],"Barangay 6 Poblacion":[10.7822755,122.4741603],"Barangay 7 Poblacion":[10.7749823,122.4712656],"Barangay 8 Poblacion":[10.7815090,122.4710444],"Barangay 9 Poblacion":[10.7823056,122.4663838],"Barangay 10 Poblacion":[10.7718776,122.4654741],"Barangay 11 Poblacion":[10.7738973,122.4683227],"Barangay 12 Poblacion":[10.7775699,122.4651052],"Barangay 13 Poblacion":[10.7737289,122.4623164],"Barangay 14 Poblacion":[10.7798993,122.4600401],"Barangay 15 Poblacion":[10.7746500,122.4579508],"Barangay 16 Poblacion":[10.7717772,122.4570493],"Consolacion":[10.8105328,122.4773039],"Igtambo":[10.7761026,122.4501447],"San Antonio":[10.7728084,122.4364110],"San Jose":[10.7664045,122.4914845],"Santa Cruz":[10.7919265,122.4630009],"Santa Teresa":[10.8055973,122.4902737],"Santo Angel":[10.7648142,122.4224498],"Santo Nino":[10.7864208,122.4862804]},
+    "Sta. Barbara":{"Agusipan":[10.8128767,122.5595579],"Agutayan":[10.8126128,122.5447150],"Bagumbayan":[10.8477556,122.5265364],"Balabag":[10.7726762,122.5094756],"Balibagan Este":[10.7972348,122.5210687],"Balibagan Oeste":[10.8086454,122.5139530],"Ban-ag":[10.8509901,122.5456351],"Bantay":[10.8684019,122.5385042],"Barangay Zone I (Poblacion)":[10.8272657,122.5314479],"Barangay Zone II (Poblacion)":[10.8302728,122.5355709],"Barangay Zone III (Poblacion)":[10.8242391,122.5339862],"Barangay Zone IV (Poblacion)":[10.8275812,122.5379532],"Barangay Zone V (Poblacion)":[10.8203736,122.5391364],"Barangay Zone VI (Poblacion)":[10.8221779,122.5429838],"Barasan Este":[10.8283099,122.5623580],"Barasan Oeste":[10.8578956,122.5526732],"Binangkilan":[10.8379884,122.5740674],"Bitaog-Taytay":[10.8319568,122.5943471],"Bolong Este":[10.8087843,122.5336297],"Bolong Oeste":[10.8173885,122.5348252],"Buayahon":[10.8591027,122.5380505],"Buyo":[10.7860896,122.5006590],"Cabugao Norte":[10.7997994,122.5477366],"Cabugao Sur":[10.8017535,122.5302241],"Cadagmayan Norte":[10.8268843,122.5116194],"Cadagmayan Sur":[10.8183532,122.5059101],"Cafe":[10.8401518,122.5634654],"Calaboa Este":[10.8167075,122.5822524],"Calaboa Oeste":[10.8108223,122.5721913],"Camambugan":[10.8357607,122.5169012],"Canipayan":[10.8245034,122.5769060],"Conaynay":[10.8216637,122.5852887],"Daga":[10.8514933,122.5613615],"Dalid":[10.8461722,122.5520220],"Duyan-Duyan":[10.8319892,122.5249824],"Gen. Martin T. Delgado":[10.8351050,122.5301634],"Guno":[10.8405269,122.5451899],"Inangayan":[10.8138444,122.5241896],"Jibao-an":[10.7767856,122.5041225],"Lacadon":[10.8539829,122.5308136],"Lanag":[10.8325077,122.5479111],"Lupa":[10.8069777,122.5508190],"Magancina":[10.8156659,122.5942214],"Malawog":[10.8055789,122.5009514],"Mambuyo":[10.8299608,122.5840181],"Manhayang":[10.8470326,122.5367219],"Miraga-Guibuangan":[10.8203206,122.5505694],"Nasugban":[10.8085001,122.5067262],"Omambog":[10.8363676,122.5878085],"Pal-Agon":[10.7859694,122.5159070],"Pungsod":[10.8607212,122.5450829],"San Sebastian":[10.8234482,122.5234080],"Sangcate":[10.8413871,122.5306269],"Tagsing":[10.7936547,122.5029741],"Talanghauan":[10.8446904,122.5213582],"Talongadian":[10.7800790,122.4985656],"Tigtig":[10.8192084,122.5687849],"Tuburan":[10.8213051,122.5962789],"Tugas":[10.8635224,122.5290785],"Tungay":[10.8371041,122.5366781]},
+    "Tigbauan":{"Alupidian":[10.7519528,122.3448795],"Atabayan":[10.6837339,122.4098338],"Bagacay":[10.6980741,122.3510287],"Baguingin":[10.6861778,122.4023739],"Bagumbayan":[10.6880736,122.3854016],"Bangkal":[10.7167854,122.4122936],"Bantud":[10.7269704,122.4204295],"Barangay 1 (Pob.)":[10.6714780,122.3751267],"Barangay 2 (Pob.)":[10.6731397,122.3740898],"Barangay 3 (Pob.)":[10.6803590,122.3793960],"Barangay 4 (Pob.)":[10.6766351,122.3833148],"Barangay 5 (Pob.)":[10.6748273,122.3770498],"Barangay 6 (Pob.)":[10.6731285,122.3793612],"Barangay 7 (Pob.)":[10.6722736,122.3834845],"Barangay 8 (Pob.)":[10.6704278,122.3804807],"Barangay 9 (Pob.)":[10.6702021,122.3770483],"Barosong":[10.7393507,122.3931102],"Barroc":[10.7073868,122.4190341],"Bayuco":[10.7099514,122.3686959],"Binaliuan Mayor":[10.7236892,122.3629299],"Binaliuan Menor":[10.7283402,122.3722034],"Bitas":[10.6996507,122.3860732],"Buenavista":[10.7093904,122.3605390],"Bugasongan":[10.7167523,122.3332906],"Buyu-an":[10.6770006,122.3515720],"Canabuan":[10.7461220,122.3810529],"Cansilayan":[10.7030914,122.3401272],"Cordova Norte":[10.7393303,122.4074390],"Cordova Sur":[10.7246712,122.4036438],"Danao":[10.7177524,122.3417693],"Dapdap":[10.7359197,122.3528880],"Dorong-an":[10.6927833,122.3691490],"Guisian":[10.7088343,122.3538446],"Isawan":[10.7434713,122.3607175],"Isian":[10.7514280,122.3695663],"Jamog":[10.7574209,122.3557183],"Lanag":[10.7230146,122.3477421],"Linobayan":[10.7416932,122.4185064],"Lubog":[10.7357097,122.3427033],"Nagba":[10.7284362,122.3798745],"Namocon":[10.6759729,122.3914164],"Napnapan Norte":[10.7155593,122.3982314],"Napnapan Sur":[10.7077830,122.3931147],"Olo Barroc":[10.6886561,122.4165850],"Parara Norte":[10.6806730,122.3661129],"Parara Sur":[10.6776071,122.3620132],"San Rafael":[10.7160347,122.3762244],"Sermon":[10.7373661,122.3674275],"Sipitan":[10.7513602,122.4183004],"Supa":[10.6919522,122.3389265],"Tan Pael":[10.6702647,122.3838971],"Taro":[10.7467461,122.3524474]},
+    "Tubungan":{"Adgao":[10.7409659,122.3247738],"Ago":[10.7902985,122.3113335],"Ambarihon":[10.7613345,122.2967170],"Ayubo":[10.7914714,122.3254218],"Bacan":[10.7686393,122.3106025],"Badiang":[10.7814205,122.2741087],"Bagunanay":[10.8210240,122.2846980],"Balicua":[10.7526482,122.3233494],"Bantayanan":[10.8288317,122.2828701],"Batga":[10.7733258,122.2887503],"Bato":[10.8199530,122.2963019],"Bikil":[10.8115847,122.2810413],"Boloc":[10.8278481,122.3061945],"Bondoc":[10.7833839,122.2982545],"Borong":[10.7758608,122.3351322],"Buenavista":[10.7767349,122.2972791],"Cadabdab":[10.8042837,122.2949428],"Daga-ay":[10.7952950,122.2899071],"Desposorio":[10.7897977,122.2899025],"Igdampog Norte":[10.8192121,122.3151228],"Igdampog Sur":[10.8115849,122.3109804],"Igpaho":[10.8359932,122.2433908],"Igtuble":[10.8181616,122.2614085],"Ingay":[10.7490592,122.3319699],"Isauan":[10.7597393,122.3354464],"Jolason":[10.7867897,122.3219008],"Jona":[10.7799543,122.2827560],"La-ag":[10.7921895,122.2852243],"Lanag Norte":[10.8049729,122.2714460],"Lanag Sur":[10.7586432,122.3220429],"Male":[10.7883924,122.2952239],"Mayang":[10.7776145,122.3278597],"Molina":[10.8220444,122.2757089],"Morcillas":[10.7975547,122.2683436],"Nagba":[10.8014303,122.3141355],"Navillan":[10.7916110,122.2662077],"Pinaopalan":[10.7931148,122.3013108],"San Jose":[10.7770306,122.3076301],"Sibucauan":[10.7802800,122.3111099],"Singon":[10.7874283,122.3051902],"Tabat":[10.7544652,122.3096829],"Tagpu-an":[10.7341721,122.3237432],"Talento":[10.7674061,122.3368835],"Teniente Benito":[10.7719117,122.3221288],"Victoria":[10.8340003,122.2902387],"Zone I Pob.":[10.7627782,122.3191212],"Zone II Pob.":[10.7681961,122.3182943],"Zone III Pob.":[10.7632822,122.3166388]}
+};
 
 // ═══════════════════════════════════════════════════════════════
 // TOWN / BARANGAY DROPDOWNS
@@ -1692,8 +1962,11 @@ document.getElementById('town').addEventListener('change', function() {
     const town = this.value;
     const sel  = document.getElementById('barangay');
 
-    // Repopulate barangay dropdown
-    sel.innerHTML = '<option value="">Select Barangay</option>';
+    // Enable/disable barangay based on whether a town is selected, so
+    // an empty, tappable dropdown never appears with no explanation.
+    sel.disabled = !town;
+    const _tr = TRANSLATIONS[_currentLang];
+    sel.innerHTML = `<option value="">${town ? _tr.phSelectBrgyReady : BRGY_FIRST_TEXT[_currentLang]}</option>`;
     (barangaysByTown[town] || []).forEach(b => {
         const o = document.createElement('option');
         o.value = b; o.textContent = b;
@@ -1701,19 +1974,13 @@ document.getElementById('town').addEventListener('change', function() {
     });
     sel.value = ''; // clear any stale barangay selection
 
-    // ── THE FIX: changing the town invalidates any previously-pinned
-    // GPS/map location — it was set for the OLD town. Without this reset,
-    // _isPrecise stayed true forever after the first map click, so every
-    // later town/barangay change skipped the address/marker update entirely.
-    _isPrecise = false;
-
     // Reset location state
     document.getElementById('centroidWarn').classList.remove('show');
     document.getElementById('outageStatusStrip').className = 'outage-status-strip';
 
-    if (town) {
-        // Always write a placeholder address whenever town changes,
-        // now that _isPrecise no longer blocks this.
+    if (!_isPrecise && town) {
+        // ── FIX 1: write a placeholder address whenever town changes ──
+        // Only overwrite if the user hasn't custom-typed something
         const addr = document.getElementById('address');
         const current = addr.value.trim();
         if (!_userEditedAddress || !current || current.endsWith(', Iloilo')) {
@@ -1725,7 +1992,7 @@ document.getElementById('town').addEventListener('change', function() {
         }
 
         // Pan map to the average centroid of all barangays in this town
-        const coords = Object.values(getTownCentroids(town));
+        const coords = Object.values(barangayCentroids[town] || {});
         if (coords.length && window._map) {
             const avgLat = coords.reduce((s, c) => s + c[0], 0) / coords.length;
             const avgLng = coords.reduce((s, c) => s + c[1], 0) / coords.length;
@@ -1745,44 +2012,43 @@ document.getElementById('barangay').addEventListener('change', function() {
     const brgy = this.value;
     if (!town || !brgy) { updateProgress(); return; }
 
-    // ── THE FIX: a new barangay selection means the person wants THIS
-    // location, not whatever they pinned earlier. Without resetting
-    // _isPrecise here, once it was true from an earlier map tap it
-    // stayed true forever, and every later barangay change silently
-    // kept the OLD pin/address instead of updating to the new one.
-    _isPrecise = false;
-
-    // Small helper so the address textbox is filled the SAME way
-    // whether or not we found exact coordinates for this barangay.
-    function fillAutoAddress() {
-        const addr = document.getElementById('address');
-        const current = addr.value.trim();
-        const isAutoAddr = !_userEditedAddress || !current || current.endsWith(', Iloilo');
-        if (isAutoAddr) {
-            addr.value = `Brgy. ${brgy}, ${town}, Iloilo`;
-            _userEditedAddress = false; // still auto-generated
-            addr.classList.add('address-suggested');
-            setTimeout(() => addr.classList.remove('address-suggested'), 1200);
-            validateField('address');
-        }
-    }
-
-    const coords = getBarangayCentroid(town, brgy); // ← fault-tolerant lookup
+    const coords = barangayCentroids[town]?.[brgy];
     if (coords) {
         const [lat, lng] = coords;
         if (window._map) _map.setView([lat, lng], 15);
 
-        updateMarker(lat, lng, null, true);
-        fillAutoAddress();
-        document.getElementById('centroidWarn').classList.add('show');
-        srAnnounce(`Map panned to ${brgy}, ${town}. Tap the map to pin your exact location.`);
+        if (!_isPrecise) {
+            updateMarker(lat, lng, null, true);
+
+            const addr = document.getElementById('address');
+            const current = addr.value.trim();
+
+            // ── FIX 2: one simple rule — ends with ", Iloilo" = auto-generated ──
+            // Also covers the empty case and the "Town, Iloilo" placeholder
+            // written by the town handler above.
+            const isAutoAddr = !_userEditedAddress
+                || !current
+                || current.endsWith(', Iloilo');
+
+            if (isAutoAddr) {
+                addr.value = `Brgy. ${brgy}, ${town}, Iloilo`;
+                _userEditedAddress = false; // still auto-generated
+                addr.classList.add('address-suggested');
+                setTimeout(() => addr.classList.remove('address-suggested'), 1200);
+                validateField('address');
+            }
+
+            document.getElementById('centroidWarn').classList.add('show');
+            srAnnounce(`Map panned to ${brgy}, ${town}. Tap the map to pin your exact location.`);
+        } else {
+            srAnnounce(`Map panned to ${brgy}, ${town}. Your pinned location is kept.`);
+            showToast(`🗺️ Map moved to ${brgy}. Your existing pin is preserved.`, 'info', 3000);
+        }
     } else {
-        // No centroid coordinates found for this barangay — still fill
-        // the address from what we know (town + barangay) rather than
-        // leaving it blank or stale.
-        fillAutoAddress();
-        document.getElementById('mapFallback').classList.add('show');
-        showToast(`📍 Address filled from ${brgy}. Tap the map or use GPS to pin your exact spot.`, 'info', 5000);
+        if (!_isPrecise) {
+            document.getElementById('mapFallback').classList.add('show');
+            showToast(`📍 No centroid data for ${brgy} — please tap the map or use GPS.`, 'info', 5000);
+        }
     }
     updateProgress();
     saveDraft();
@@ -1834,9 +2100,6 @@ function normalizePhoneNumber(v) {
     }
     return n;
 }
-// ═══════════════════════════════════════════════════════════════
-// VALIDATORS
-// ═══════════════════════════════════════════════════════════════
 // Fields that are genuinely optional — an empty value is always
 // acceptable and must NEVER be styled as invalid/required.
 const OPTIONAL_FIELDS = new Set(['email', 'accountNumber']);
@@ -1850,8 +2113,7 @@ const validators = {
     },
     // Optional — empty is fine. Only validate FORMAT if the person typed something.
     email:         v => (!v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) ? null : 'Invalid email format',
-    // Optional — empty is fine. Format check mirrors the backend rule
-    // (letters/numbers/hyphens, 1-30 chars) so front and back agree.
+    // Optional — empty is fine. Mirrors backend rule (letters/numbers/hyphens, 1-30 chars).
     accountNumber: v => (!v || /^[A-Za-z0-9\-]{1,30}$/.test(v.trim())) ? null : 'Account number may only contain letters, numbers, and hyphens',
     address:       v => (!v || v.trim().length < 5) ? 'Please provide a complete address (at least your barangay and town)' : null,
     details:       v => (!v || v.trim().length < 1) ? 'Please describe the incident' : null,
@@ -1867,8 +2129,6 @@ function validateField(id) {
 
     const isEmptyOptional = OPTIONAL_FIELDS.has(id) && !el.value.trim();
     if (isEmptyOptional) {
-        // Never mark an empty optional field as valid or invalid —
-        // it has nothing to validate and must not look "required".
         el.classList.remove('invalid', 'valid');
         el.setAttribute('aria-invalid', 'false');
         if (sp) sp.textContent = '';
@@ -1901,7 +2161,6 @@ function validateField(id) {
             const sp = document.getElementById(`err-${id}`);
             if (sp) sp.textContent = '';
         }
-        // Optional field cleared back to empty — strip any leftover styling immediately
         if (OPTIONAL_FIELDS.has(id) && !el.value.trim()) {
             el.classList.remove('invalid', 'valid');
         }
@@ -1926,15 +2185,25 @@ document.getElementById('address').addEventListener('input', function() {
 // ═══════════════════════════════════════════════════════════════
 // ACCOUNT NUMBER LIVE CONFIRMATION
 // ═══════════════════════════════════════════════════════════════
+let _acctConfirmTimer = null;
 document.getElementById('accountNumber').addEventListener('input', function() {
     const box = document.getElementById('accountConfirm');
-    if (this.value.trim()) {
-        box.innerHTML = `<div style="background:#f0fdf4;border:1px solid #10b981;padding:8px 12px;border-radius:8px;color:#065f46;font-size:12px;">✅ Account number recorded: ${esc(this.value.trim())}</div>`;
-        box.classList.add('show');
-    } else {
+    const val = this.value.trim();
+    clearTimeout(_acctConfirmTimer);
+
+    if (!val) {
         box.innerHTML = '';
         box.classList.remove('show');
+        return;
     }
+
+    // Debounce: only confirm once the person pauses typing. Showing
+    // "recorded" after every keystroke falsely implies a still-incomplete
+    // number has already been captured.
+    _acctConfirmTimer = setTimeout(() => {
+        box.innerHTML = `<div style="background:#f0fdf4;border:1px solid #10b981;padding:8px 12px;border-radius:8px;color:#065f46;font-size:12px;">✅ Account number recorded: ${esc(val)}</div>`;
+        box.classList.add('show');
+    }, 600);
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -1978,13 +2247,6 @@ function renderPhotoPreview(url, isVideo) {
         const idx = _photoUrls.indexOf(url);
         if (idx > -1) _photoUrls.splice(idx, 1);
         box.remove();
-        // FIX: keep the "X/3 files attached" counter in sync after removal —
-        // previously this text only updated inside the upload handler, so
-        // removing a photo left a stale count on screen until the next upload.
-        const statusEl = document.getElementById('photoStatus');
-        statusEl.textContent = _photoUrls.length
-            ? `${_photoUrls.length}/${MAX_PHOTOS} file(s) attached`
-            : '';
     });
     wrap.appendChild(box);
 }
@@ -2040,13 +2302,31 @@ document.getElementById('photoInput').addEventListener('change', async function(
 // ═══════════════════════════════════════════════════════════════
 const detailsEl = document.getElementById('details');
 const counterEl = document.getElementById('detailsCounter');
+let _detailsTouched = false;
+
 function updateCounter() {
     const len = detailsEl.value.trim().length;
-    if (len === 0)     { counterEl.className='char-counter danger'; counterEl.textContent='Please enter a description'; }
-    else if (len < 20) { counterEl.className='char-counter warn';   counterEl.textContent=`${len} characters — more detail helps us respond faster`; }
-    else               { counterEl.className='char-counter ok';     counterEl.textContent=`${len} / 2000 characters ✓`; }
+    if (len === 0) {
+        // Only show the red "error" state once the person has actually
+        // interacted with the field and left it empty — not on page load,
+        // before they've had a chance to type anything.
+        if (_detailsTouched) {
+            counterEl.className = 'char-counter danger';
+            counterEl.textContent = 'Please enter a description';
+        } else {
+            counterEl.className = 'char-counter neutral';
+            counterEl.textContent = 'Describe the incident (required)';
+        }
+    } else if (len < 20) {
+        counterEl.className = 'char-counter warn';
+        counterEl.textContent = `${len} characters — more detail helps us respond faster`;
+    } else {
+        counterEl.className = 'char-counter ok';
+        counterEl.textContent = `${len} / 2000 characters ✓`;
+    }
 }
-detailsEl.addEventListener('input', () => { updateCounter(); updatePriorityBar(); updateProgress(); });
+detailsEl.addEventListener('input', () => { _detailsTouched = true; updateCounter(); updatePriorityBar(); updateProgress(); });
+detailsEl.addEventListener('blur',  () => { _detailsTouched = true; updateCounter(); });
 updateCounter();
 
 // ═══════════════════════════════════════════════════════════════
@@ -2057,12 +2337,15 @@ function updatePriorityBar() {
     const type = document.getElementById('incidentType').value;
     const det  = document.getElementById('details').value;
     const bar  = document.getElementById('priorityBar');
-    const critTypes = ['fallen_wire','fire_hazard','transformer_issue','sparking','leaning_pole','vehicular_accident'];
-    const critWords = ['fire','explosion','burning','fallen wire','electric shock','live wire',
-                       'sparking','arcing','injured','death','pole down','wire down',
-                       'short circuit','about to fall','blocking road','leaning badly','tilted'];
+        // Mirrors backend _INCIDENT_TYPE_MAP / _SE_ESCALATION_KEYWORDS
+    const critTypes = ['fallen_wire','fire_hazard','transformer_issue','sparking','vehicular_accident','other'];
+    const critWords = ['fire','explosion','burning','smoke','accident','fallen wire','electric shock',
+                       'live wire','transformer burst','emergency','danger','hazard','sparking',
+                       'exposed wire','electrocuted','injured','death','pole down','wire down',
+                       'short circuit','arcing','flames','about to fall','blocking road',
+                       'leaning badly','tilted'];
     let priority = 'high';
-   if (type === 'sdi_problem' || type === 'streetlight' || type === 'vegetation_clearing') priority = 'medium';
+    if (type === 'sdi_problem' || type === 'streetlight' || type === 'vegetation_clearing') priority = 'medium';
     else if (critTypes.includes(type) || critWords.some(w => det.toLowerCase().includes(w))) priority = 'critical';
 
     _currentPriority = priority;
@@ -2076,7 +2359,8 @@ function updatePriorityBar() {
 
     const btn = document.getElementById('submitBtn');
     if (btn && !btn.disabled) {
-        btn.innerHTML = priority === 'medium' ? '📋 Send Report' : '⚡ Send Emergency Report';
+        const _tr = TRANSLATIONS[_currentLang];
+        btn.innerHTML = priority === 'medium' ? _tr.submitMedium : _tr.submitBtn;
     }
 }
 
@@ -2169,15 +2453,18 @@ document.getElementById('outageForm').addEventListener('submit', async function(
         clearConsentError();
     }
 
-    if (!_lat || !_lng) {
-        const addr = document.getElementById('address').value.trim();
-        if (!addr || addr.length < 5) {
-            showError('⚠️ Please pin your location on the map or type your complete address (Barangay + Town).');
+        if (_lat == null || _lng == null) {
+        // Backend requires coordinates — fall back to the selected barangay centroid
+        const _c = barangayCentroids[document.getElementById('town').value]
+                                    ?.[document.getElementById('barangay').value];
+        if (!_c) {
+            showError('⚠️ Please select your Town and Barangay, or pin your location on the map.');
             document.getElementById('mapFallback').classList.add('show');
-            document.getElementById('address').scrollIntoView({ behavior:'smooth', block:'center' });
+            document.getElementById('town').scrollIntoView({ behavior:'smooth', block:'center' });
             return;
         }
-        showToast('📍 Submitting without map pin — your typed address will be used.', 'info', 5000);
+        _lat = _c[0]; _lng = _c[1]; _isPrecise = false;
+        showToast('📍 No map pin — using your barangay\'s approximate location plus your typed address.', 'info', 5000);
     } else if (!_isPrecise) {
         showToast('📍 Using approximate barangay location. Tap the map next time for faster crew dispatch.', 'info', 5000);
     }
@@ -2210,12 +2497,9 @@ const btn = document.getElementById('submitBtn');
     btn.disabled = true; btn.textContent = '⏳ Submitting Report…';
     document.getElementById('errorMsg').style.display = 'none';
 
-    // ── FIX: don't lock the 60s cooldown until we know this submission
-    // actually went through. Previously _lastClientSubmit was stamped
-    // immediately, so ANY failure (duplicate/429, expired token/403,
-    // validation error, network error) permanently consumed the cooldown
-    // window — forcing the user to refresh the page (which resets this
-    // in-memory variable) just to retry a submission that never sent.
+    // Don't lock the cooldown until we know this attempt actually succeeded —
+    // otherwise any failure (typo, expired token, server error) burns the
+    // 60s window and forces a wait even though nothing was ever submitted.
     const _previousSubmitTime = _lastClientSubmit;
     _lastClientSubmit = Date.now();
     const elapsedMs   = Date.now() - _pageLoadTime;
@@ -2241,15 +2525,13 @@ const btn = document.getElementById('submitBtn');
         source:         'Web Form',
         is_approximate_location: !_isPrecise,
         photo_urls:     _photoUrls,
-        _client_priority: _currentPriority,   // ← ADD THIS
         _hp_field:      document.getElementById('_hp_field')?.value || '',
     };
 
     function saveReportOffline() {
-    const { id: queuedId, queueLength } = queueOfflineReport(payload, elapsedMs);
-    _pendingOfflineQueueId = queuedId;
-    _submitted = true; _formDirty = false;
-    clearDraft();
+        const queueLength = queueOfflineReport(payload, elapsedMs);
+        _submitted = true; _formDirty = false;
+        clearDraft();
         document.getElementById('outageForm').style.display  = 'none';
         document.getElementById('priorityBar').style.display = 'none';
         document.getElementById('successDetail').innerHTML = `
@@ -2258,30 +2540,21 @@ const btn = document.getElementById('submitBtn');
                     📡 No connection — your report has been saved
                 </div>
                 <p style="font-size:13px;color:#78350f;line-height:1.6;">
-                    It will send automatically once you're back online. ${queueLength} report${queueLength > 1 ? 's' : ''} waiting.
+                    We couldn't reach the server right now. Your report is saved on this device
+                    and will be sent automatically the moment your connection is restored —
+                    you don't need to do anything else.
                 </p>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:12px;">
-                <a href="tel:+639989893028"
-                   style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
-                          background:#991b1b;color:#fff;text-decoration:none;font-weight:700;
-                          padding:11px;border-radius:10px;font-size:13px;">
-                    📞 Call Hotline
-                </a>
-                <a href="${messengerLink('talk_to_agent')}" target="_blank" rel="noopener"
-                   style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
-                          background:#1877F2;color:#fff;text-decoration:none;font-weight:700;
-                          padding:11px;border-radius:10px;font-size:13px;">
-                    💬 Chat with Agent
-                </a>
+                <p style="font-size:12px;color:#92400e;margin-top:10px;">
+                    ${queueLength} report${queueLength > 1 ? 's' : ''} waiting to send.
+                    For emergencies (fallen wire, fire, electric shock) call
+                    <strong><a href="tel:+639989893028" style="color:#991b1b;">09989893028</a></strong> directly.
+                </p>
             </div>`;
         document.getElementById('successWrap').querySelector('h3').textContent = '💾 Report Saved Offline';
         document.getElementById('successWrap').style.display = 'block';
         document.getElementById('successWrap').scrollIntoView({ behavior:'smooth' });
         srAnnounce('No connection. Your report has been saved and will send automatically when back online.');
         btn.disabled = false; updatePriorityBar();
-        // Offline queueing counts as "handled" — keep the cooldown locked
-        // so the same payload isn't queued twice in rapid succession.
     }
 
     // Browser already knows it's offline — skip doomed network calls, queue immediately
@@ -2318,13 +2591,9 @@ const btn = document.getElementById('submitBtn');
     try {
         let { res, resData } = await attemptSubmit(token);
 
-        // ── Transparent token-expiry retry ───────────────────────────────
-        // A form can legitimately stay open far longer than the token's
-        // server-side TTL (consumer distracted, slow typing, spotty
-        // signal during an actual outage). Rather than forcing a page
-        // refresh — which loses their place mid-emergency-report — mint
-        // a fresh token and resubmit ONCE, silently, before bothering
-        // the user with anything.
+        // Transparent one-time retry on a stale/invalid token — a form can
+        // stay open longer than the token TTL. Refresh silently and retry
+        // once before bothering the user with anything.
         if (!res.ok && res.status === 403 &&
             ((resData.error_code === 'TOKEN_INVALID') ||
              (resData.error || '').toLowerCase().includes('session') ||
@@ -2337,9 +2606,8 @@ const btn = document.getElementById('submitBtn');
         }
 
         if (!res.ok) {
-            // ── FIX: this attempt never actually went through — release
-            // the cooldown so the user can correct the issue and retry
-            // immediately instead of being forced to refresh the page.
+            // This attempt never went through — release the cooldown so the
+            // person can fix the issue and retry immediately, not wait 60s.
             _lastClientSubmit = _previousSubmitTime;
 
             const serverMsg = resData.error || `Server error ${res.status}`;
@@ -2352,9 +2620,8 @@ const btn = document.getElementById('submitBtn');
                     showError('⚠️ ' + serverMsg);
                 }
             } else if (res.status === 403) {
-                // We already tried one silent token refresh + retry above.
-                // Landing here means it genuinely failed twice (e.g. token
-                // store unreachable), so a manual refresh is a real ask now.
+                // Already retried once above — a second failure means a real
+                // problem, so a manual refresh is a fair ask now.
                 showError('⚠️ Your session could not be verified.\n• Please refresh this page (press F5 or pull down on mobile).\n• Your form data has been saved as a draft.\n• If the problem continues, call 09989893028 directly.');
                 ensureFormToken(true);
             } else {
@@ -2368,24 +2635,97 @@ const btn = document.getElementById('submitBtn');
         if (resData.success) {
             _submitted = true; _formDirty = false;
             clearDraft();
+            document.getElementById('outageForm').style.display  = 'none';
+            document.getElementById('priorityBar').style.display = 'none';
 
             const refId = resData.reference_id || (() => {
-                const town = document.getElementById('town').value || 'XX';
-                const code = {
-                    'Cabatuan':'CA','Alimodian':'AL','Guimbal':'GU','Igbaras':'IG',
-                    'Leganes':'LG','Leon':'LE','Maasin':'MA','Miag-ao':'MI',
-                    'Oton':'OT','Pavia':'PV','San Joaquin':'SJ','San Miguel':'SM',
-                    'Sta. Barbara':'SB','Tigbauan':'TG','Tubungan':'TU'
-                }[town] || town.substring(0,2).toUpperCase();
-                const d = new Date();
-                const yy = String(d.getFullYear()).slice(2);
-                const mm = String(d.getMonth()+1).padStart(2,'0');
-                const dd = String(d.getDate()).padStart(2,'0');
-                return `${code}${yy}${mm}${dd}${String(Math.floor(Math.random()*9000)+1000)}`;
-            })();
+    const town = document.getElementById('town').value || 'XX';
+    const code = {
+        'Cabatuan':'CA','Alimodian':'AL','Guimbal':'GU','Igbaras':'IG',
+        'Leganes':'LG','Leon':'LE','Maasin':'MA','Miag-ao':'MI',
+        'Oton':'OT','Pavia':'PV','San Joaquin':'SJ','San Miguel':'SM',
+        'Sta. Barbara':'SB','Tigbauan':'TG','Tubungan':'TU'
+    }[town] || town.substring(0,2).toUpperCase();
+    const d = new Date();
+    const yy = String(d.getFullYear()).slice(2);
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const dd = String(d.getDate()).padStart(2,'0');
+    return `${code}${yy}${mm}${dd}${String(Math.floor(Math.random()*9000)+1000)}`;
+})();
             const isFollowup = resData.is_followup === true;
+            sessionStorage.setItem('ileco_last_ref', refId);
 
-            buildAndShowSuccessUI(refId, payload, _currentPriority, resData.feeder_name, isFollowup);
+            const successTitle = isFollowup ? '📋 Follow-Up Recorded!' : '✅ Report Successfully Submitted!';
+            const successIntro = isFollowup
+                ? `<div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:14px;color:#78350f;">ℹ️ <strong>This is a follow-up to an earlier report.</strong><br>Your report count has been raised and our team has been notified.</div>`
+                : '';
+
+            const p    = (resData.priority || _currentPriority || 'high').toUpperCase();
+            const pCfg = {
+                CRITICAL:{ col:'#991b1b', bg:'#fee2e2', icon:'🚨', text:'Emergency response team alerted. Help is on the way.' },
+                HIGH:    { col:'#9a3412', bg:'#fed7aa', icon:'⚡', text:'Our team will respond urgently.' },
+                MEDIUM:  { col:'#4c1d95', bg:'#f3e8ff', icon:'🔦', text:'Our service team will schedule an inspection.' },
+            }[p] || { col:'#1e40af', bg:'#dbeafe', icon:'⚡', text:'Our team will respond.' };
+
+            const feederLine = resData.feeder_name
+                ? `<p><strong>⚡ Feeder:</strong> ${esc(resData.feeder_name)}</p>` : '';
+            const approxNote = !_isPrecise
+                ? `<div class="approx-note">📍 Location set from barangay selection (approximate). Tap the map or use GPS next time for faster dispatch.</div>` : '';
+
+            document.getElementById('successDetail').innerHTML = `
+    ${successIntro}
+    <div class="ref-box">
+        <div class="ref-lbl">Your Reference Number</div>
+        <div class="ref-id">${esc(refId)}</div>
+        <button class="copy-btn" onclick="copyRef('${String(refId).replace(/[^A-Za-z0-9\-]/g, '')}')">📋 Copy Reference Number</button>
+    </div>
+    <div style="background:${pCfg.bg};padding:13px;border-radius:10px;margin-bottom:13px;border:1px solid ${pCfg.col}20;">
+        <div style="font-size:17px;font-weight:700;color:${pCfg.col};margin-bottom:5px;">${pCfg.icon} ${p} PRIORITY</div>
+        <p style="color:${pCfg.col};margin:0;font-size:13px;">${pCfg.text}</p>
+    </div>
+    <div class="success-detail">
+        <p><strong>📍 Location:</strong> ${esc(payload.address)}</p>
+        ${feederLine}
+        ${approxNote}
+        <p><strong>📞 Contact:</strong> ${esc(payload.contact_number)}</p>
+        <p style="margin-top:10px;">✅ Your report has been received. Quote your reference number for any follow-up calls.</p>
+        <hr style="margin:12px 0;border:none;border-top:1px solid #e5e7eb;">
+        <p style="font-size:12px;color:#6b7280;">24/7 hotline: <strong><a href="tel:+639989893028" style="color:#1e40af;">09989893028</a></strong> (Globe)</p>
+    </div>
+
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px;margin-top:14px;">
+        <div style="font-weight:700;color:#1e40af;font-size:14px;margin-bottom:6px;">
+            💬 Need to add details or have another concern?
+        </div>
+        <p style="font-size:13px;color:#1e3a8a;margin-bottom:12px;">
+            Chat with our ILECO-1 Messenger assistant anytime — quote
+            <strong>${esc(refId)}</strong> in follow-up report then track my report so we can pull up your report instantly.
+        </p>
+        <a href="${messengerLink('track_' + refId)}" target="_blank" rel="noopener"
+           style="display:flex;align-items:center;justify-content:center;gap:8px;
+                  background:#1877F2;color:#fff;text-decoration:none;font-weight:700;
+                  padding:11px;border-radius:10px;font-size:14px;margin-bottom:8px;">
+            💬 Open Messenger Chat
+        </a>
+        <a href="${messengerLink('talk_to_agent')}" target="_blank" rel="noopener"
+           style="display:flex;align-items:center;justify-content:center;gap:8px;
+                  background:#fff;color:#1877F2;text-decoration:none;font-weight:700;
+                  padding:11px;border-radius:10px;font-size:14px;border:2px solid #1877F2;">
+            🧑‍💼 Chat with an Live Agent
+        </a>
+        <p style="font-size:11px;color:#64748b;margin-top:8px;text-align:center;">
+            Opens Facebook Messenger. If it doesn't open automatically, search
+            "ILECO-1" on Messenger and tap the chat.
+        </p>
+    </div>`;
+
+            document.getElementById('successWrap').querySelector('h3').textContent = successTitle;
+            document.getElementById('successWrap').style.display = 'block';
+            document.getElementById('successWrap').scrollIntoView({ behavior:'smooth' });
+            srAnnounce(`${isFollowup ? 'Follow-up' : 'Report'} submitted. Reference: ${refId}`);
+        } else {
+            showError(resData.error || 'Failed to submit. Please try again or call 09989893028.');
+            btn.disabled = false; updatePriorityBar();
         }
 
     } catch (err) {
@@ -2394,7 +2734,6 @@ const btn = document.getElementById('submitBtn');
     }
 
 });
-
 
 // ═══════════════════════════════════════════════════════════════
 // COPY REF ID
@@ -2413,13 +2752,22 @@ function copyRef(refId) {
 // ═══════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════
+loadDraft();
 updatePriorityBar();
 updateProgress();
-loadDraft();
 flushOfflineQueue();
 
+// Restore saved language LAST — every const/let above is initialised by now
+(function restoreSavedLang() {
+    try {
+        const saved = localStorage.getItem('ileco_lang');
+        if (saved && TRANSLATIONS[saved] && saved !== 'en') {
+            switchLang(saved);
+        }
+    } catch (_) {}
+})();
+
 function resetFormSmoothly() {
-    _pendingOfflineQueueId = null;   // ← FIX: correct variable name
     document.getElementById('successWrap').style.display = 'none';
     document.getElementById('outageForm').style.display  = 'block';
     document.getElementById('priorityBar').style.display = 'none';
@@ -2447,7 +2795,7 @@ function resetFormSmoothly() {
 
     const gpsBtn = document.getElementById('gpsBtn');
     gpsBtn.disabled    = false;
-    gpsBtn.textContent = '📡 Use My Current GPS Location';
+    gpsBtn.textContent = TRANSLATIONS[_currentLang].gpsBtn;
 
     document.getElementById('consentCheck').checked = false;
     clearConsentError();
@@ -2472,8 +2820,8 @@ function resetFormSmoothly() {
     document.querySelector('.header').scrollIntoView({ behavior: 'smooth' });
 
     const btn = document.getElementById('submitBtn');
-    btn.disabled  = false;
-    btn.innerHTML = '⚡ Send Emergency Report';
+    btn.disabled = false;
+    updatePriorityBar();
 
     _formToken = null;
     _doFetchToken().then(t => { if (t) { _formToken = t; _formTokenIssuedAt = Date.now(); } });

@@ -124,6 +124,9 @@
     .name-sub { font-size:11px; color:var(--text-light); font-family:'DM Mono',monospace; }
     .badge { display:inline-flex; align-items:center; gap:4px; padding:4px 9px; border-radius:20px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; white-space:nowrap; }
     .badge-pending{background:var(--amber-bg);color:var(--amber-dark);} .badge-resolved{background:var(--green-bg);color:var(--green-dark);} .badge-critical{background:var(--red-bg);color:var(--red-dark);animation:pulse-red 2s infinite;} .badge-high{background:var(--amber-bg);color:var(--amber-dark);} .badge-medium{background:var(--green-bg);color:var(--green-dark);} .badge-low{background:var(--blue-bg);color:var(--blue-dark);}
+    .badge-awaiting-confirmation{background:var(--blue-bg);color:var(--blue-dark);}
+    .badge-unresolved{background:var(--red-bg);color:var(--red-dark);}
+    .badge-auto-closed{background:var(--border);color:var(--text-light);}
     @keyframes pulse-red{0%,100%{opacity:1}50%{opacity:.7}}
     .wait-time { font-family:'DM Mono',monospace; font-size:12px; color:var(--text-mid); }
     .wait-time.long{color:var(--red);font-weight:600;} .wait-time.medium-wait{color:var(--amber);font-weight:600;}
@@ -190,6 +193,7 @@
 
     @media(max-width:900px){.kpi-strip{grid-template-columns:repeat(3,1fr);}.detail-grid{grid-template-columns:1fr;}}
     @media(max-width:600px){.kpi-strip{grid-template-columns:repeat(2,1fr);padding:12px 16px;}.ileco-header{padding:0 16px;}.main{padding:12px 16px;}}
+
     </style>
 </head>
 <body>
@@ -300,11 +304,14 @@
 
     <div class="toolbar">
         <span class="toolbar-label">Filters:</span>
-        <select class="filter-select" id="statusFilter" onchange="applyFilters()">
-            <option value="all">All Status</option>
-            <option value="Pending">Pending</option>
-            <option value="Resolved">Resolved</option>
-        </select>
+    <select class="filter-select" id="statusFilter" onchange="applyFilters()">
+        <option value="all">All Status</option>
+        <option value="Pending">Pending</option>
+        <option value="Awaiting Confirmation">Awaiting Confirmation</option>
+        <option value="Resolved">Resolved</option>
+        <option value="Unresolved">Unresolved</option>
+        <option value="Auto-Closed">Auto-Closed</option>
+    </select>
         <select class="filter-select" id="priorityFilter" onchange="applyFilters()">
             <option value="all">All Priority</option>
             <option value="critical">🚨 Critical</option>
@@ -341,6 +348,7 @@
                         <th>Wait / Response Time</th>
                         <th>Status</th>
                         <th>Served At / By</th>
+                        <th>Rating</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -500,9 +508,53 @@ function formatResponseTime(t, s) {
                 :           'color:var(--green);font-weight:700;'
     };
 }
-function formatDateTime(iso){if(!iso)return '—';return new Date(iso).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});}
-function formatTime(iso){if(!iso)return '—';return new Date(iso).toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',hour12:true});}
-function isSameLocalDay(iso){if(!iso)return false;var d=new Date(iso),now=new Date();return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()&&d.getDate()===now.getDate();}
+function formatTime(iso){
+    if(!iso) return '—';
+    return new Date(iso).toLocaleTimeString('en-PH',{
+        hour:'2-digit', minute:'2-digit', hour12:true,
+        timeZone:'Asia/Manila'
+    });
+}
+function formatDateTime(iso){
+    if(!iso) return '—';
+    return new Date(iso).toLocaleString('en-PH',{
+        month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:true,
+        timeZone:'Asia/Manila'
+    });
+}
+
+// ── FIX: converts a status string like "Awaiting Confirmation" into a
+// CSS-safe class suffix "awaiting-confirmation" so it matches the
+// .badge-awaiting-confirmation / .badge-unresolved / .badge-auto-closed
+// rules defined in <style>. Plain .toLowerCase() alone leaves the space
+// in "Awaiting Confirmation", producing a class name that matches
+// nothing and renders with no color styling.
+function statusToClass(status){
+    return (status||'').toLowerCase().replace(/\s+/g,'-');
+}
+
+// Returns a "YYYY-MM-DD" string for the given ISO timestamp, evaluated
+// in Asia/Manila — NOT the browser's local timezone. Mirrors the
+// backend's DATE(... AT TIME ZONE 'Asia/Manila') logic exactly, so the
+// frontend and backend can never disagree about what "today" means.
+var _PH_DATE_FMT = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+});
+// 'en-CA' locale formats as YYYY-MM-DD directly.
+
+function phDateString(iso){
+    if(!iso) return null;
+    var d = new Date(iso);
+    if(isNaN(d.getTime())) return null;
+    return _PH_DATE_FMT.format(d);
+}
+
+function isSameLocalDay(iso){
+    var target = phDateString(iso);
+    if(!target) return false;
+    return target === phDateString(new Date().toISOString());
+}
 
 function initSocket(){
     socket=io({
@@ -623,9 +675,26 @@ function renderTable(items){
                 +'</div>';
         }
 
-        var statusBadge='<span class="badge badge-'+(item.status||'').toLowerCase()+'">'+escHtml(item.status)+'</span>';
+        var statusBadge='<span class="badge badge-'+statusToClass(item.status)+'">'+escHtml(item.status)+'</span>';
         var priClass=(item.priority||'low').toLowerCase();
         var priBadge='<span class="badge badge-'+priClass+'">'+escHtml(item.priority)+'</span>';
+
+        /* ── Star rating cell ── */
+var ratingCell = '—';
+if (!isPending) {
+    var r = item.rating;
+    if (r && r >= 1 && r <= 5) {
+        var stars = '⭐'.repeat(r) + '☆'.repeat(5 - r);
+        var ratingColors = ['','#ef4444','#f97316','#eab308','#84cc16','#10b981'];
+        ratingCell =
+            '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">'
+            +'<span style="font-size:13px;letter-spacing:1px;">'+stars+'</span>'
+            +'<span style="font-size:10px;font-weight:700;color:'+ratingColors[r]+';">'+r+'/5</span>'
+            +'</div>';
+    } else {
+        ratingCell = '<span style="color:var(--text-light);font-size:11px;">Not yet rated</span>';
+    }
+}
 
         var actions='<button class="act-btn view" onclick="event.stopPropagation();showDetail('+item.id+')">👁 View</button>';
         if(isPending){
@@ -648,6 +717,7 @@ function renderTable(items){
             +'<td>'+waitCell+'</td>'
             +'<td>'+statusBadge+'</td>'
             +'<td>'+servedCell+'</td>'
+            +'<td>'+ratingCell+'</td>' 
             +'<td onclick="event.stopPropagation()">'+actions+'</td>'
             +'</tr>';
     }).join('');
@@ -763,18 +833,21 @@ async function serveCustomer(id){
         if(data.success){
             var idx=allItems.findIndex(i=>i.id===id);
             if(idx!==-1){
-                allItems[idx].status='Resolved';
+                // FIX: the backend now moves a ticket to 'Awaiting Confirmation',
+                // not 'Resolved' — it only becomes Resolved once the consumer
+                // taps "Yes, resolved!" in Messenger. Reflect that here instead
+                // of optimistically marking it Resolved.
+                allItems[idx].status='Awaiting Confirmation';
                 allItems[idx].served_at=new Date().toISOString();
                 allItems[idx].served_by=servedBy;
             }
             renderTable(applySearch(allItems));
             updateKPIs();
 
-            // Show whether Rasa resume succeeded
-            if(data.rasa_ok === false){
-                showToast('✅ Resolved locally — Rasa resume failed, check logs.','warn');
+            if(data.notified === false){
+                showToast('⚠️ Marked awaiting confirmation, but the customer could not be notified: '+(data.notify_error||''),'warn');
             } else {
-                showToast('✅ '+name+' resolved. Bot conversation resumed.','success');
+                showToast('✅ Asked '+name+' to confirm resolution.','success');
             }
 
             setTimeout(refreshData, 1000);
@@ -882,17 +955,28 @@ function showDetail(id){
                 :'<span style="color:var(--text-light);font-style:italic;font-size:13px;">Not recorded</span>')
             +'</div></div>';
     }
+        var ratingCard = '';
+    if (!isPending && item.rating) {
+        var r = parseInt(item.rating);
+        var stars = '⭐'.repeat(r) + '☆'.repeat(5 - r);
+        ratingCard =
+            '<div class="detail-card">'
+            +'<div class="detail-lbl">⭐ Customer Rating</div>'
+            +'<div class="detail-val" style="font-size:18px;letter-spacing:2px;">'+stars+' <span style="font-size:13px;color:var(--text-mid);">'+r+'/5</span></div>'
+            +'</div>';
+    }
 
-    document.getElementById('modalGrid').innerHTML=
+        document.getElementById('modalGrid').innerHTML=
         '<div class="detail-card"><div class="detail-lbl">Full Name</div><div class="detail-val">'+escHtml(item.full_name||'—')+'</div></div>'
         +'<div class="detail-card"><div class="detail-lbl">Contact Number</div><div class="detail-val" style="font-family:\'DM Mono\',monospace;">'+escHtml(item.contact_number||'—')+'</div></div>'
         +'<div class="detail-card"><div class="detail-lbl">Priority</div><div class="detail-val"><span class="badge badge-'+priClass+'">'+escHtml(item.priority||'—')+'</span></div></div>'
-        +'<div class="detail-card"><div class="detail-lbl">Status</div><div class="detail-val"><span class="badge badge-'+(item.status||'').toLowerCase()+'">'+escHtml(item.status||'—')+'</span></div></div>'
+        +'<div class="detail-card"><div class="detail-lbl">Status</div><div class="detail-val"><span class="badge badge-'+statusToClass(item.status)+'">'+escHtml(item.status||'—')+'</span></div></div>'
         +'<div class="detail-card full"><div class="detail-lbl">Concern</div><div class="detail-val">'+escHtml(item.concern||'—')+'</div></div>'
         +'<div class="detail-card"><div class="detail-lbl">Queued At</div><div class="detail-val">'+formatDateTime(item.timestamp)+'</div></div>'
         +'<div class="detail-card"><div class="detail-lbl">'+timingLabel+'</div><div class="detail-val">'+timingContent+'</div></div>'
         +responseCard
         +servedByCard
+        +ratingCard
         +'<div class="detail-card full" style="background:var(--navy);color:#fff;">'
         +'<div class="detail-lbl" style="color:rgba(255,255,255,.5);">Facebook User ID</div>'
         +'<div class="detail-val" style="color:var(--gold);font-family:\'DM Mono\',monospace;font-size:12px;">'+escHtml(item.user_id||'—')+'</div>'
@@ -903,7 +987,7 @@ function showDetail(id){
     footer.innerHTML=
         '<button class="btn btn-ghost" onclick="closeModal()">Close</button>'
         +'<button class="btn" style="background:var(--amber-bg);color:var(--amber-dark);" onclick="pauseBot(\''+escHtml(item.user_id)+'\')">⏸ Pause Bot</button>'
-        +'<button class="btn btn-primary" onclick="closeModal();serveCustomer('+item.id+')">✓ Resolve & Resume</button>';
+        +'<button class="btn btn-primary" onclick="closeModal();serveCustomer('+item.id+')">✓ Ask Customer to Confirm</button>';
 
     }else{
         var removeBtn = window.CURRENT_USER_ROLE === 'superadmin'

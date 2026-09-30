@@ -120,15 +120,38 @@
     .act-btn { padding:5px 10px; border-radius:6px; border:none; font-family:'DM Sans',sans-serif; font-size:11px; font-weight:700; cursor:pointer; transition:all .2s; display:inline-flex; align-items:center; gap:4px; }
     .act-btn.review{background:var(--green);color:#fff;} .act-btn.review:hover{background:#059669;}
     .act-btn.copy{background:var(--blue-bg);color:var(--blue-dark);} .act-btn.copy:hover{background:#bfdbfe;}
+    .act-btn.danger{background:var(--red);color:#fff;} .act-btn.danger:hover{background:#dc2626;}
     .act-btn:disabled{opacity:.4;cursor:not-allowed;}
     .empty-state{padding:60px 20px;text-align:center;} .empty-icon{font-size:48px;margin-bottom:12px;} .empty-title{font-size:16px;font-weight:700;color:var(--text-mid);margin-bottom:4px;} .empty-sub{font-size:13px;color:var(--text-light);}
     .loading-row td{padding:40px;text-align:center;color:var(--text-light);font-style:italic;}
-    .toast-container{position:fixed;top:80px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+    .toast-container{position:fixed;top:80px;right:20px;z-index:10000;display:flex;flex-direction:column;gap:8px;}
     .toast{padding:12px 18px;border-radius:9px;font-size:13px;font-weight:600;box-shadow:var(--shadow-md);animation:toast-in .25s ease;max-width:360px;display:flex;align-items:center;gap:8px;}
     @keyframes toast-in{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
     .toast.success{background:var(--green);color:#fff;} .toast.error{background:var(--red);color:#fff;} .toast.info{background:var(--navy);color:#fff;}
 
+    /* ── Risk pills ── */
+    .risk{display:inline-block;padding:4px 9px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;white-space:nowrap;}
+    .risk-NORMAL{background:var(--green-bg);color:var(--green-dark);}
+    .risk-SUSPICIOUS{background:var(--amber-bg);color:var(--amber-dark);}
+    .risk-POTENTIAL_SPAM{background:var(--red-bg);color:var(--red-dark);}
+    .risk-TEMPORARILY_BLOCKED,.risk-BLOCKED{background:var(--navy);color:var(--gold);}
+
+    /* ── Conversation viewer ── */
+    .cv-overlay{position:fixed;inset:0;background:rgba(15,28,63,.6);z-index:9998;display:flex;align-items:center;justify-content:center;padding:16px;}
+    .cv-box{background:#fff;border-radius:14px;width:100%;max-width:920px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-lg);}
+    .cv-head{background:var(--navy);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;}
+    .cv-body{display:grid;grid-template-columns:1.4fr 1fr;gap:0;overflow:hidden;flex:1;min-height:0;}
+    .cv-chat{padding:16px;overflow-y:auto;background:var(--smoke);display:flex;flex-direction:column;gap:8px;}
+    .cv-side{padding:16px;overflow-y:auto;border-left:1px solid var(--border);font-size:13px;}
+    .cv-side h4{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-mid);margin:14px 0 6px;} .cv-side h4:first-child{margin-top:0;}
+    .cv-msg{max-width:80%;padding:8px 12px;border-radius:10px;font-size:13px;white-space:pre-wrap;word-break:break-word;}
+    .cv-msg.customer{align-self:flex-start;background:#fff;border:1px solid var(--border);}
+    .cv-msg.bot{align-self:flex-end;background:var(--navy-light);color:#fff;}
+    .cv-meta{font-size:10px;opacity:.65;margin-bottom:2px;font-family:'DM Mono',monospace;}
+    .cv-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+
     @media(max-width:900px){.kpi-strip{grid-template-columns:repeat(2,1fr);}}
+    @media(max-width:700px){.cv-body{grid-template-columns:1fr;overflow-y:auto;}}
     @media(max-width:600px){.ileco-header{padding:0 16px;}.main{padding:12px 16px;}}
     </style>
 </head>
@@ -161,9 +184,9 @@
             <span class="tab-icon">🛡️</span> Spam Monitor
             <span class="ileco-nav-badge" id="spamBadge">0</span>
         </a>
-              <a href="/feature_flags" class="ileco-nav-tab" id="navFlags">
-    <span class="tab-icon">🎛️</span> Feature Flags
-</a>
+        <a href="/feature_flags" class="ileco-nav-tab" id="navFlags">
+            <span class="tab-icon">🎛️</span> Feature Flags
+        </a>
     </nav>
     <div class="ileco-header-right">
         <div class="ileco-user-widget" id="userWidget">
@@ -218,7 +241,7 @@
 
 <main class="main">
     <div class="info-banner">
-        ℹ️ This is a <strong>detection-only</strong> monitor — nothing here is auto-blocked. Click a Facebook User ID to copy it, then search for that user in your Facebook Page inbox to review the conversation and manually block them there if needed.
+        ℹ️ <strong>Block</strong> here is a bot-level block; it does <strong>not</strong> block the user on Facebook. <strong>Soft block</strong> (recommended): the bot sends one "access restricted, please call the office" notice, then stops accepting reports and agent-queue requests. <strong>Full silence</strong>: the bot never replies. Click <strong>View Conversation</strong> to review what the user sent before blocking.
     </div>
 
     <!-- ═══ TOP OFFENDERS SUMMARY ═══ -->
@@ -234,13 +257,15 @@
                 <thead>
                     <tr>
                         <th>Facebook User ID</th>
-                        <th>Flag Count</th>
+                        <th>Flags</th>
+                        <th>Risk</th>
                         <th>Last Flagged</th>
                         <th>Status</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="summaryBody">
-                    <tr class="loading-row"><td colspan="4">⏳ Loading…</td></tr>
+                    <tr class="loading-row"><td colspan="6">⏳ Loading…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -358,9 +383,12 @@ function formatDateTime(iso){
     if(!iso) return '—';
     return new Date(iso).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
 }
+function fmtTime(iso){
+    return iso ? new Date(iso).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}) : '—';
+}
 function reasonBadges(eventType){
     var reasons = (eventType||'').split(',').filter(Boolean);
-    return reasons.map(r => '<span class="badge badge-'+r+'">'+(r==='flood'?'🌊 Flood':'🔁 Repeat')+'</span>').join(' ');
+    return reasons.map(r => '<span class="badge badge-'+escHtml(r)+'">'+(r==='flood'?'🌊 Flood':'🔁 Repeat')+'</span>').join(' ');
 }
 
 async function refreshData(){
@@ -398,7 +426,7 @@ function renderSummary(items){
     var tbody = document.getElementById('summaryBody');
     var sub = document.getElementById('summarySubtitle');
     if(!items || items.length === 0){
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-light);padding:24px;">No flagged senders yet — that\'s good news.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-light);padding:24px;">No flagged senders yet — that\'s good news.</td></tr>';
         sub.textContent = '0 senders';
         return;
     }
@@ -407,12 +435,14 @@ function renderSummary(items){
         var statusBadge = s.any_reviewed
             ? '<span class="badge badge-reviewed">✓ Reviewed</span>'
             : '<span class="badge badge-unreviewed">⏳ Needs Review</span>';
+        var id = escHtml(s.sender_id);
         return '<tr>'
-            + '<td><span class="sender-id" onclick="copyToClipboard(\''+escHtml(s.sender_id)+'\')" title="Click to copy">'+escHtml(s.sender_id)+'</span></td>'
-            + '<td><span class="flag-count-pill">'+s.flag_count+'</span></td>'
+            + '<td><span class="sender-id" onclick="copyToClipboard(\''+id+'\')" title="Click to copy">'+id+'</span></td>'
+            + '<td><span class="flag-count-pill" title="'+s.flags_1h+' in last hour">'+s.flag_count+'</span></td>'
+            + '<td><span class="risk risk-'+escHtml(s.risk)+'">'+escHtml(String(s.risk).replace(/_/g,' '))+'</span></td>'
             + '<td>'+formatDateTime(s.last_flagged)+'</td>'
             + '<td>'+statusBadge+'</td>'
-            + '<td><button class="act-btn copy" onclick="viewProfile(\''+escHtml(s.sender_id)+'\')">👤 View Profile</button></td>'
+            + '<td><button class="act-btn copy" onclick="openConversation(\''+id+'\')">💬 View Conversation</button></td>'
             + '</tr>';
     }).join('');
 }
@@ -433,7 +463,7 @@ function renderTable(items){
             : '<span class="badge badge-unreviewed">⏳ Unreviewed</span>';
 
         var actions = '<button class="act-btn copy" onclick="copyToClipboard(\''+escHtml(item.sender_id)+'\')">📋 Copy ID</button>'
-            + ' <button class="act-btn copy" onclick="viewProfile(\''+escHtml(item.sender_id)+'\')">👤 View Profile</button>';
+            + ' <button class="act-btn copy" onclick="openConversation(\''+escHtml(item.sender_id)+'\')">💬 View Conversation</button>';
         if(!item.reviewed){
             actions += ' <button class="act-btn review" onclick="markReviewed('+item.id+')">✓ Mark Reviewed</button>';
         }
@@ -492,6 +522,117 @@ async function markReviewed(logId){
     }
 }
 
+/* ═══ CONVERSATION VIEWER + BLOCK / UNBLOCK ═══ */
+async function openConversation(senderId){
+    var existing = document.querySelector('.cv-overlay');
+    if(existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.className = 'cv-overlay';
+    overlay.innerHTML = '<div class="cv-box"><div class="cv-head"><b>Loading conversation…</b></div></div>';
+    overlay.onclick = function(e){ if(e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+
+    try{
+        var res = await fetch('/api/spam_senders/'+encodeURIComponent(senderId)+'/conversation', {credentials:'same-origin'});
+        var d = await res.json();
+        if(!d.success) throw new Error(d.error || 'Failed');
+
+        var r = d.risk, blocked = !!d.block;
+        var chat = d.messages.length
+            ? d.messages.map(function(m){
+                return '<div class="cv-msg '+m.role+'"><div class="cv-meta">'+fmtTime(m.timestamp)+' · '
+                    +(m.role==='customer'?'CUSTOMER':'ILECO CHATBOT')+'</div>'+escHtml(m.text)+'</div>';
+              }).join('')
+            : '<div style="color:var(--text-light);text-align:center;padding:30px;">'
+              + (d.rasa_available ? 'No messages in the Rasa tracker for this user.' : '⚠️ Rasa tracker unreachable — cannot load messages.')
+              + '</div>';
+
+        var events = d.spam_events.slice(0,10).map(function(e){
+            return '<div style="margin-bottom:6px;"><span style="font-family:\'DM Mono\',monospace;font-size:11px;">'+fmtTime(e.created_at)+'</span> — '
+                + escHtml(e.event_type) + '<br><span style="color:var(--text-mid);">'+escHtml((e.message_sample||'').slice(0,120))+'</span></div>';
+        }).join('') || '<i>None</i>';
+
+        var actions = d.agent_actions.map(function(a){
+            return '<div style="margin-bottom:6px;">'+fmtTime(a.created_at)+' — <b>'+escHtml(a.action)+'</b> by '+escHtml(a.performed_by||'?')
+                + (a.note?'<br><span style="color:var(--text-mid);">'+escHtml(a.note)+'</span>':'')+'</div>';
+        }).join('') || '<i>None</i>';
+
+        var blockInfo = blocked
+            ? '<div style="background:var(--red-bg);color:var(--red-dark);padding:8px;border-radius:6px;">Bot-level block active — <b>'
+              + (d.block.block_mode === 'FULL' ? 'Full silence' : 'Soft block') + '</b>'
+              + (d.block.blocked_until ? ' until '+fmtTime(d.block.blocked_until) : ' (indefinite)')
+              + '<br>By '+escHtml(d.block.blocked_by||'?')+(d.block.reason?' — '+escHtml(d.block.reason):'')+'</div>'
+            : 'Not blocked';
+
+        var msgrBtn = d.messenger_link
+            ? '<a class="act-btn copy" style="text-decoration:none;" target="_blank" rel="noopener noreferrer" href="'+escHtml(d.messenger_link)+'">↗ Open in Messenger</a>'
+            : '<span style="font-size:11px;color:var(--text-light);" title="'+escHtml(d.messenger_link_note||'')+'">Open in Messenger: unavailable</span>';
+
+        var sid = escHtml(senderId);
+        var blockControls = blocked
+            ? '<button class="act-btn review" onclick="unblockSender(\''+sid+'\')">Unblock</button>'
+            : '<select id="cvMode" class="filter-select" title="Soft: one restricted notice, then the bot stops handling requests. Full: bot never replies.">'
+              + '<option value="SOFT">Soft block (recommended)</option><option value="FULL">Full silence</option></select>'
+              + '<select id="cvDuration" class="filter-select">'
+              + '<option value="60">1 hour</option><option value="1440">24 hours</option>'
+              + '<option value="10080">7 days</option><option value="">Indefinite</option></select>'
+              + '<input id="cvReason" class="search-input" style="min-width:160px;" placeholder="Reason (optional)" maxlength="300">'
+              + '<button class="act-btn danger" onclick="blockSender(\''+sid+'\')">🚫 Block (bot-level)</button>';
+
+        overlay.innerHTML =
+            '<div class="cv-box">'
+          + '<div class="cv-head"><div><div style="font-weight:700;">Messenger ID: <span style="font-family:\'DM Mono\',monospace;">'+sid+'</span></div>'
+          + '<div style="font-size:12px;opacity:.85;margin-top:3px;">Risk: <span class="risk risk-'+escHtml(r.level)+'">'+escHtml(r.level.replace(/_/g,' '))+'</span> · Last flagged: '+fmtTime(r.last_activity)+'</div></div>'
+          + '<button class="btn btn-ghost" onclick="this.closest(\'.cv-overlay\').remove()">✕</button></div>'
+          + '<div class="cv-body"><div class="cv-chat">'+chat+'</div><div class="cv-side">'
+          + '<h4>Spam signals</h4>Total flags: <b>'+r.flags_total+'</b> · last hour: <b>'+r.flags_1h+'</b><br>Repeated-message events: <b>'+r.repeat_events+'</b> · Flood events: <b>'+r.flood_events+'</b>'
+          + '<h4>Outage reports</h4><span style="color:var(--text-mid);">Not linked — reports are not stored against Messenger ID.</span>'
+          + '<h4>Block status</h4>'+blockInfo
+          + '<h4>Flag events</h4>'+events
+          + '<h4>Agent actions</h4>'+actions
+          + '</div></div>'
+          + '<div class="cv-foot">'+msgrBtn+'<div class="toolbar-spacer"></div>'+blockControls+'</div>'
+          + '</div>';
+    }catch(e){
+        overlay.remove();
+        showToast('❌ '+e.message,'error');
+    }
+}
+
+async function blockSender(senderId){
+    var dur = document.getElementById('cvDuration').value;
+    var reason = document.getElementById('cvReason').value;
+    var mode = document.getElementById('cvMode').value;
+    if(dur === '' && !confirm('Block this user indefinitely at the bot level?')) return;
+    try{
+        var res = await fetch('/api/spam_senders/'+encodeURIComponent(senderId)+'/block', {
+            method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({duration_minutes: dur === '' ? null : parseInt(dur,10), reason: reason, mode: mode})
+        });
+        var d = await res.json();
+        if(!d.success) throw new Error(d.error || 'Failed');
+        showToast('🚫 User blocked at bot level.','success');
+        var ov = document.querySelector('.cv-overlay'); if(ov) ov.remove();
+        refreshData();
+    }catch(e){ showToast('❌ '+e.message,'error'); }
+}
+
+async function unblockSender(senderId){
+    try{
+        var res = await fetch('/api/spam_senders/'+encodeURIComponent(senderId)+'/unblock', {
+            method:'POST', credentials:'same-origin'
+        });
+        var d = await res.json();
+        if(!d.success) throw new Error(d.error || 'Failed');
+        showToast('✅ User unblocked.','success');
+        var ov = document.querySelector('.cv-overlay'); if(ov) ov.remove();
+        refreshData();
+    }catch(e){ showToast('❌ '+e.message,'error'); }
+}
+
+/* Legacy Facebook profile lookup — kept for reference; no longer wired to a button */
 async function viewProfile(senderId){
     showToast('🔍 Looking up profile…','info');
     try{

@@ -515,10 +515,11 @@ const CONCERN_LABELS = {
 };
 
 /* Core Engine Step Navigator Orchestrator */
-function navigateToStep(targetStep) {
+async function navigateToStep(targetStep) {
   if (targetStep > currentStep) {
-    if (!validateCurrentStepScope()) return;
+    if (!(await validateCurrentStepScope())) return;
   }
+  // ...rest unchanged
   
   document.getElementById(`panel${currentStep}`).classList.remove('active');
   document.getElementById(`panel${targetStep}`).classList.add('active');
@@ -645,9 +646,12 @@ async function verifyAgainstMasterlist() {
       return true;
     }
 
-    if (data.field) {
+       if (data.field === 'both') {
+      setInvalid('accountNumber', data.error);
+      setInvalid('consumerName', data.error);
+      if (currentStep === 2) navigateBackTo(1);
+    } else if (data.field) {
       setInvalid(data.field, data.error);
-      // Jump back to step 1 if the failing field is there but we're on step 2
       if (currentStep === 2 && (data.field === 'accountNumber' || data.field === 'consumerName')) {
         navigateBackTo(1);
       }

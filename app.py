@@ -1,3 +1,17 @@
+import os
+# ── FIX: eventlet's monkey-patched DNS resolver (greendns) hardcodes
+# Google's public DNS (8.8.8.8 / 8.8.4.4) instead of using this
+# machine's configured resolver. On networks where those IPs are
+# blocked/unreachable (corporate firewalls, some ISPs, VPNs), EVERY
+# hostname lookup made through eventlet-patched sockets times out —
+# this is why the cloud Supabase host and the realtime listener both
+# fail to resolve, even though the SAME hostname resolves fine outside
+# Python (e.g. via nslookup or a browser). Setting this env var before
+# monkey_patch() tells eventlet to skip greendns and fall back to the
+# OS's normal, non-green DNS resolution, which respects whatever DNS
+# server(s) this machine is actually configured to use.
+os.environ['EVENTLET_NO_GREENDNS'] = 'yes'
+
 import eventlet
 eventlet.monkey_patch()
 from psycogreen.eventlet import patch_psycopg
@@ -40,6 +54,7 @@ import requests as _req
 import os
 import threading as _threading
 from flask_wtf.csrf import CSRFError
+import difflib
 
 
 
@@ -193,6 +208,7 @@ def _get_feeder_available_columns():
     if _feeder_available_cols is not None:
         return _feeder_available_cols
     cols = set()
+    ok = False
     conn = get_db_connection()
     if conn:
         cur = None
@@ -203,13 +219,15 @@ def _get_feeder_available_columns():
                 WHERE table_name = 'ILECO_1_COVERAGE_AREA_FEEDERS_FINALoutput'
             """)
             cols = {r[0] for r in cur.fetchall()}
+            ok = True
         except Exception as e:
             logger.warning(f"Could not introspect feeder table columns: {e}")
         finally:
             if cur: cur.close()
             release_db_connection(conn)
-    _feeder_available_cols = cols
-    logger.info(f"Feeder optional columns available: {cols & set(_FEEDER_OPTIONAL_COLS)}")
+    if ok:
+        _feeder_available_cols = cols
+        logger.info(f"Feeder optional columns available: {cols & set(_FEEDER_OPTIONAL_COLS)}")
     return cols
 
 def _feeder_optional_select() -> str:
@@ -402,29 +420,31 @@ PUBLIC_API_ENDPOINTS = {
     '/api/internal/agent_queue',
 }
 
+# Endpoints that are called SERVER-TO-SERVER by the Rasa action server
+# (authenticated via X-Internal-Secret, not a browser session), but that
+# don't live under the /api/internal/ prefix because they're also reachable
+# from the dashboard UI's own JS in other flows. CSRF must be skipped for
+# these ONLY when the request actually carries a valid internal secret —
+# is_internal_request() is checked here, not just the path, so a browser
+# without the secret still gets normal CSRF enforcement.
+INTERNAL_SECRET_CSRF_EXEMPT_PREFIXES = (
+    '/api/agent_queue/',   # covers .../confirm_resolved, .../rate, .../requeue
+)
+
 @app.before_request
 def csrf_protect_routes():
-    # Never block OPTIONS — these are CORS preflight checks from Vercel
     if request.method == 'OPTIONS':
         return None
     if request.path.startswith('/socket.io'):
         return None
-    # Internal-only endpoints (Rasa, etc.) authenticate via shared
-    # secret / IP allowlist (is_internal_request), not session cookies,
-    # so CSRF does not apply to them.
     if request.path.startswith('/api/internal/'):
         return None
-    # Explicitly whitelisted public, unauthenticated endpoints
-    # Explicitly whitelisted public, unauthenticated endpoints
     if request.method == "POST" and request.path in PUBLIC_API_ENDPOINTS:
         return None
-    # /login is a JSON POST from an un-authenticated page, but it now
-    # carries a CSRF token (see login.html) — so it goes through the
-    # same protection as everything else. An unprotected login endpoint
-    # is vulnerable to login CSRF: a malicious page can silently force
-    # a victim's browser to authenticate as an attacker-controlled
-    # account, after which the victim unknowingly submits real data
-    # into a session that isn't theirs.
+    if (request.method == "POST"
+            and request.path.startswith(INTERNAL_SECRET_CSRF_EXEMPT_PREFIXES)
+            and is_internal_request()):
+        return None
     if request.method in ("POST", "PUT", "DELETE"):
         csrf.protect()
 
@@ -529,9 +549,6 @@ def security_headers(response):
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     response.headers['Permissions-Policy'] = 'geolocation=(self)'
-    # NOTE: 'unsafe-inline' is required because current templates use
-    # large inline <script>/<style> blocks. This is an interim CSP —
-    # migrating to nonce-based inline scripts removes the need for it.
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' https://unpkg.com "
@@ -540,12 +557,12 @@ def security_headers(response):
         "https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data: https: blob:; "
+        "media-src 'self' https://*.supabase.co blob:; "
         "connect-src 'self' https://*.supabase.co "
         "https://nominatim.openstreetmap.org https://api.mapbox.com "
         "https://graph.facebook.com; "
         "frame-ancestors 'self';"
     )
-    # Don't add HSTS here — Railway's proxy handles it
     return response
 
 
@@ -565,117 +582,171 @@ class CustomJSONProvider(DefaultJSONProvider):
 
 app.json = CustomJSONProvider(app)
 
-# ============================================
-# DUAL DATABASE POOLS
-# ============================================
 local_db_pool = None
 cloud_db_pool = None
-joblist_db_pool = None 
+joblist_db_pool = None
+
+LOCAL_POOL_MAX = int(os.getenv('LOCAL_POOL_MAX', '3'))
+_local_sem = _threading.BoundedSemaphore(LOCAL_POOL_MAX)
+_local_pool_last_attempt = 0
+_LOCAL_POOL_RETRY_SECONDS = 15
 
 def initialize_local_pool():
-    global local_db_pool
+    global local_db_pool, _local_pool_last_attempt
     if local_db_pool is not None:
         return True
+    now = _time_module.time()
+    if now - _local_pool_last_attempt < _LOCAL_POOL_RETRY_SECONDS:
+        return False
+    _local_pool_last_attempt = now
     try:
         local_db_pool = psycopg2.pool.ThreadedConnectionPool(
-            2, 20,
+            1, LOCAL_POOL_MAX,
             host=os.getenv('LOCAL_DB_HOST', 'localhost'),
             port=int(os.getenv('LOCAL_DB_PORT', '5432')),
             database=os.getenv('LOCAL_DB_NAME', 'ileco1_user'),
             user=os.getenv('LOCAL_DB_USER', 'postgres'),
             password=os.getenv('LOCAL_DB_PASSWORD', ''),
-            connect_timeout=5,
-            options='-c statement_timeout=8000'
+            connect_timeout=4,
+            **({} if int(os.getenv("LOCAL_DB_PORT", "5432")) == 6543
+               else {'options': '-c statement_timeout=8000 -c timezone=Asia/Manila'})
         )
         logger.info("[OK] Local DB pool initialized")
         return True
     except Exception as e:
-        logger.exception("[ERROR] Local DB pool failed — login will not work")
+        logger.warning(f"[ERROR] Local DB pool failed — login will not work: {e}")
         local_db_pool = None
         return False
 
+CLOUD_POOL_MAX = int(os.getenv('CLOUD_POOL_MAX', '5'))
+_cloud_sem = _threading.BoundedSemaphore(CLOUD_POOL_MAX)   # greenthreads WAIT here instead of erroring
+_cloud_init_lock = _threading.Lock()
+_cloud_last_used = {}                                       # id(conn) -> epoch of last release
+_CLOUD_PING_IDLE_SECONDS = 20
+
 _cloud_pool_last_attempt = 0
-_CLOUD_POOL_RETRY_SECONDS = 60  # only retry once per minute
+_CLOUD_POOL_RETRY_SECONDS = 60
+
 
 def initialize_cloud_pool():
     global cloud_db_pool, _cloud_pool_last_attempt
-    if cloud_db_pool is not None:
-        return True
-    
-    now = _time_module.time()
-    if now - _cloud_pool_last_attempt < _CLOUD_POOL_RETRY_SECONDS:
+    with _cloud_init_lock:                       # only ONE greenthread may build the pool
+        if cloud_db_pool is not None:
+            return True
+
+        now = _time_module.time()
+        if now - _cloud_pool_last_attempt < _CLOUD_POOL_RETRY_SECONDS:
+            return False
+        _cloud_pool_last_attempt = now
+
+        try:
+            import socket
+            host = os.getenv("CLOUD_DB_HOST", "")
+            socket.getaddrinfo(host, None)
+
+            cloud_db_pool = psycopg2.pool.ThreadedConnectionPool(
+                1, CLOUD_POOL_MAX,
+                host=host,
+                port=int(os.getenv("CLOUD_DB_PORT", "5432")),
+                database=os.getenv("CLOUD_DB_NAME"),
+                user=os.getenv("CLOUD_DB_USER"),
+                password=os.getenv("CLOUD_DB_PASSWORD"),
+                connect_timeout=10,
+                sslmode='require',
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=5,
+                   **({} if int(os.getenv("CLOUD_DB_PORT", "5432")) == 6543
+      else {'options': '-c statement_timeout=8000 -c timezone=Asia/Manila'})
+            )
+            logger.info("[OK] Cloud DB pool initialized")
+            return True
+        except Exception:
+            logger.exception("[ERROR] Cloud DB pool failed")
+            cloud_db_pool = None
+            return False
+
+
+def _cloud_conn_healthy(conn) -> bool:
+    if conn.closed:
         return False
-    
-    _cloud_pool_last_attempt = now
-    
+    idle = _time_module.time() - _cloud_last_used.get(id(conn), 0)
+    if idle < _CLOUD_PING_IDLE_SECONDS:
+        return True                      # used moments ago — skip the extra round trip
     try:
-        # Test DNS resolution BEFORE creating pool
-        import socket
-        host = os.getenv("CLOUD_DB_HOST", "")
-        socket.getaddrinfo(host, None)  # ← Fail fast if DNS is broken
-        
-        cloud_db_pool = psycopg2.pool.ThreadedConnectionPool(
-            5, 30,
-            host=host,
-            port=int(os.getenv("CLOUD_DB_PORT", "5432")),
-            database=os.getenv("CLOUD_DB_NAME"),
-            user=os.getenv("CLOUD_DB_USER"),
-            password=os.getenv("CLOUD_DB_PASSWORD"),
-            connect_timeout=10,
-            sslmode='require',
-            keepalives=1,
-            keepalives_idle=30,
-            keepalives_interval=10,
-            keepalives_count=5,
-            options='-c statement_timeout=8000'
-        )
-        logger.info("[OK] Cloud DB pool initialized")
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        cur.close()
+        conn.rollback()
         return True
-    except Exception as e:
-        logger.exception("[ERROR] Cloud DB pool failed")
-        cloud_db_pool = None
+    except Exception:
         return False
+
+
+def get_cloud_conn():
+    global cloud_db_pool
+
+    if not _cloud_sem.acquire(timeout=10):
+        logger.error("Cloud DB: timed out waiting for a free connection slot")
+        return None
+
+    conn = None
+    try:
+        for attempt in range(3):
+            if cloud_db_pool is None and not initialize_cloud_pool():
+                break
+
+            pool = cloud_db_pool
+            try:
+                candidate = pool.getconn()
+            except Exception as e:
+                logger.warning(
+                    f"Cloud pool getconn failed (attempt {attempt + 1}/3): {e}"
+                )
+                _time_module.sleep(0.5 * (attempt + 1))   # green sleep under eventlet
+                continue
+
+            if _cloud_conn_healthy(candidate):
+                conn = candidate
+                break
+
+            logger.warning("Discarding stale cloud connection")
+            _cloud_last_used.pop(id(candidate), None)
+            try:
+                pool.putconn(candidate, close=True)
+            except Exception as e:
+                logger.warning(f"Failed to discard stale cloud connection: {e}")
+
+        return conn
+    finally:
+        if conn is None:
+            _cloud_sem.release()
 
 def get_local_conn():
     global local_db_pool
-    if local_db_pool is None:
-        initialize_local_pool()
-    try:
-        return local_db_pool.getconn() if local_db_pool else None
-    except Exception as e:
-        logger.exception("Error getting local DB connection")
+
+    if not _local_sem.acquire(timeout=10):
+        logger.error("Local DB: timed out waiting for a free connection slot")
         return None
 
-def get_cloud_conn():
-    global cloud_db_pool, _cloud_pool_last_attempt
-    
-    # ── If pool exists, try to get a connection ──────────────────────────────
-    if cloud_db_pool is not None:
-        try:
-            conn = cloud_db_pool.getconn()
-            # Quick ping to verify connection is alive
-            cur = conn.cursor()
-            cur.execute("SELECT 1")
-            cur.close()
-            return conn
-        except Exception as e:
-            logger.warning(f"Cloud pool connection failed, resetting pool: {e}")
+    conn = None
+    try:
+        for attempt in range(3):
+            if local_db_pool is None and not initialize_local_pool():
+                break
             try:
-                cloud_db_pool.closeall()
-            except Exception:
-                pass
-            cloud_db_pool = None  # ← Force re-init on next call
-            _cloud_pool_last_attempt = 0  # ← Reset retry timer
-
-    # ── Pool is None — try to re-initialize ──────────────────────────────────
-    if initialize_cloud_pool():
-        try:
-            return cloud_db_pool.getconn()
-        except Exception as e:
-            logger.exception("Error getting cloud DB connection after re-init")
-            return None
-    
-    return None
+                conn = local_db_pool.getconn()
+                break
+            except Exception as e:
+                logger.warning(
+                    f"Local pool getconn failed (attempt {attempt + 1}/3): {e}"
+                )
+                _time_module.sleep(0.5 * (attempt + 1))
+        return conn
+    finally:
+        if conn is None:
+            _local_sem.release()
 
 def initialize_joblist_pool():
     global joblist_db_pool
@@ -739,20 +810,39 @@ def release_joblist_conn(conn):
         logger.exception("Error releasing joblist connection")
 
 def release_local_conn(conn):
-    global local_db_pool
+    if not conn:
+        return
     try:
-        if conn and local_db_pool:
+        if local_db_pool:
             local_db_pool.putconn(conn)
-    except Exception as e:
+        else:
+            conn.close()
+    except Exception:
         logger.exception("Error releasing local connection")
+        try:
+            conn.close()
+        except Exception:
+            pass
+    finally:
+        _local_sem.release()
 
 def release_cloud_conn(conn):
-    global cloud_db_pool
+    if not conn:
+        return
     try:
-        if conn and cloud_db_pool:
-            cloud_db_pool.putconn(conn)
-    except Exception as e:
+        if cloud_db_pool:
+            _cloud_last_used[id(conn)] = _time_module.time()
+            cloud_db_pool.putconn(conn, close=bool(conn.closed))
+        else:
+            conn.close()
+    except Exception:
         logger.exception("Error releasing cloud connection")
+        try:
+            conn.close()
+        except Exception:
+            pass
+    finally:
+        _cloud_sem.release()
 
 def get_db_connection():
     return get_cloud_conn()
@@ -976,6 +1066,7 @@ def _ws_throttle_ok(channel, min_interval=2.0):
 
 initialize_local_pool()
 initialize_cloud_pool()
+_get_feeder_available_columns()   # warm cache before any request holds a connection
 _validate_config_constants()
 _init_token_backend()      
 
@@ -1238,7 +1329,7 @@ def api_admin_toggle_feature_flag(flag_key):
         if not row:
             return jsonify({'success': False, 'error': f'Unknown flag: {flag_key}'}), 404
         conn.commit()
-        get_feature_flags(force_refresh=True)  # bust this worker's cache immediately
+        _feature_flags_cache['ts'] = 0  # expire cache; next read refetches (no nested connection)
         logger.info(f"Feature flag '{flag_key}' set to {enabled} by {actor}")
         return jsonify({'success': True, 'flag': dict(row)})
     except Exception as e:
@@ -1308,6 +1399,76 @@ def _normalize_for_match(s: str) -> str:
     s = re.sub(r'\s+', ' ', s)
     return s
 
+NAME_MATCH_THRESHOLD = 0.80
+
+def _name_key(s: str) -> str:
+    """Order-insensitive key: 'DELA CRUZ, JUAN' == 'JUAN DELA CRUZ'."""
+    s = _normalize_for_match(s).replace(',', ' ')
+    return ' '.join(sorted(s.split()))
+
+def _name_similarity(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
+    plain = difflib.SequenceMatcher(None, _normalize_for_match(a), _normalize_for_match(b)).ratio()
+    sorted_ = difflib.SequenceMatcher(None, _name_key(a), _name_key(b)).ratio()
+    return max(plain, sorted_)
+
+def match_masterlist(cur, account_lookup, consumer_name, meter_lookup=''):
+    """
+    Returns dict: ok, field, error, matched_by ('account'|'name'), score.
+
+    Rule:
+      - Account number found            -> valid (name is ignored)
+      - Account not found, name >= 80%  -> valid
+      - Otherwise                       -> invalid
+    Meter serial (if given) must belong to the matched record.
+    """
+    row, matched_by, score = None, None, 0.0
+
+    # 1) Account number (exact match)
+    if account_lookup:
+        cur.execute("""SELECT consumer_name, meter_number
+                       FROM consumer_masterlist
+                       WHERE account_number = %s""",
+                    (account_lookup,))
+        row = cur.fetchone()
+        if row:
+            matched_by = 'account'
+            score = _name_similarity(row['consumer_name'], consumer_name) if consumer_name else 0.0
+
+    # 2) Fallback: fuzzy name. Pre-filter on the longest word of the typed
+    #    name so "JUAN DELA CRUZ" still finds "DELA CRUZ, JUAN".
+    if not row and consumer_name:
+        tokens = [t for t in _name_key(consumer_name).split() if len(t) >= 3]
+        if tokens:
+            longest = max(tokens, key=len)
+            cur.execute("""SELECT consumer_name, meter_number
+                           FROM consumer_masterlist
+                           WHERE UPPER(consumer_name) LIKE %s
+                           LIMIT 5000""",
+                        ('%' + longest + '%',))
+            best_row, best_score = None, 0.0
+            for cand in cur.fetchall():
+                s = _name_similarity(cand['consumer_name'], consumer_name)
+                if s > best_score:
+                    best_row, best_score = cand, s
+            score = best_score
+            if best_row and best_score >= NAME_MATCH_THRESHOLD:
+                row, matched_by = best_row, 'name'
+
+    if not row:
+        return {'ok': False, 'field': 'both', 'matched_by': None, 'score': score,
+                'error': 'We could not find your record. Please check your account number '
+                         'or your name exactly as printed on your bill.'}
+
+    # 3) Meter serial must belong to the matched record
+    if meter_lookup and _normalize_for_match(row['meter_number']) != _normalize_for_match(meter_lookup):
+        return {'ok': False, 'field': 'meterNumber', 'matched_by': matched_by, 'score': score,
+                'error': 'The meter serial number does not match our records. '
+                         'Please check the number stamped on your meter.'}
+
+    return {'ok': True, 'field': None, 'error': '', 'matched_by': matched_by, 'score': score}
+
 @app.route('/api/verify_masterlist', methods=['POST'])
 @limiter.limit("30 per hour")
 def verify_masterlist():
@@ -1326,53 +1487,24 @@ def verify_masterlist():
     account_number_lookup = re.sub(r'[^A-Za-z0-9]', '', account_number_raw)
     meter_number_lookup    = re.sub(r'[^A-Za-z0-9]', '', meter_number_raw)
 
-    if not account_number_lookup:
-        return jsonify({'valid': False, 'field': 'accountNumber',
-                         'error': 'Please enter your account number.'}), 200
+    if not account_number_lookup and not consumer_name:
+        return jsonify({'valid': False, 'field': 'both',
+                        'error': 'Please enter your account number or your full name.'}), 200
 
     conn = get_db_connection()
     if not conn:
         return jsonify({'valid': False, 'field': None,
-                         'error': 'Verification service unavailable. Please try again.'}), 200
-
+                        'error': 'Verification service unavailable. Please try again.'}), 200
     cur = None
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("""
-            SELECT consumer_name, meter_number
-            FROM consumer_masterlist
-            WHERE account_number = %s
-        """, (account_number_lookup,))
-        row = cur.fetchone()
-
-        if not row:
-            return jsonify({
-                'valid': False, 'field': 'accountNumber',
-                'error': f'Account number "{account_number_raw}" was not found in our records. '
-                         f'Please check your billing statement and try again.'
-            }), 200
-
-        if consumer_name and _normalize_for_match(row['consumer_name']) != _normalize_for_match(consumer_name):
-            return jsonify({
-                'valid': False, 'field': 'consumerName',
-                'error': 'The account owner\'s name does not match our records for this '
-                         'account number. Please enter the exact name printed on your bill.'
-            }), 200
-
-        if meter_number_lookup:
-            if _normalize_for_match(row['meter_number']) != _normalize_for_match(meter_number_raw):
-                return jsonify({
-                    'valid': False, 'field': 'meterNumber',
-                    'error': 'The meter serial number does not match our records for this '
-                             'account number. Please check the number stamped on your meter.'
-                }), 200
-
-        return jsonify({'valid': True, 'field': None, 'error': ''}), 200
-
+        r = match_masterlist(cur, account_number_lookup, consumer_name, meter_number_lookup)
+        logger.info(f"verify_masterlist: ok={r['ok']} by={r['matched_by']} score={r['score']:.2f}")
+        return jsonify({'valid': r['ok'], 'field': r['field'], 'error': r['error']}), 200
     except Exception as e:
         logger.warning(f"verify_masterlist error: {e}")
         return jsonify({'valid': False, 'field': None,
-                         'error': 'Verification failed. Please try again.'}), 200
+                        'error': 'Verification failed. Please try again.'}), 200
     finally:
         if cur: cur.close()
         release_db_connection(conn)
@@ -1381,32 +1513,8 @@ def validate_against_masterlist(conn, account_number: str, consumer_name: str, m
     cur = None
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("""
-            SELECT consumer_name, meter_number
-            FROM consumer_masterlist
-            WHERE account_number = %s
-        """, (account_number,))
-        row = cur.fetchone()
-
-        if not row:
-            return (
-                f'Account number "{account_number}" was not found in our records. '
-                f'Please double-check your account number on your billing statement.'
-            )
-
-        if _normalize_for_match(row['consumer_name']) != _normalize_for_match(consumer_name):
-            return (
-                'The account owner\'s name does not match our records for this '
-                'account number. Please enter the exact name printed on your bill.'
-            )
-
-        if _normalize_for_match(row['meter_number']) != _normalize_for_match(meter_number):
-            return (
-                'The meter serial number does not match our records for this '
-                'account number. Please check the number stamped on your meter.'
-            )
-
-        return None
+        r = match_masterlist(cur, account_number, consumer_name, meter_number)
+        return None if r['ok'] else r['error']
     finally:
         if cur:
             cur.close()
@@ -1683,13 +1791,14 @@ def index():
 def health():
     status = {'status': 'ok', 'checks': {}}
     http_status = 200
+
+    conn = None
     try:
         conn = get_cloud_conn()
         if conn:
             cur = conn.cursor()
             cur.execute('SELECT 1')
             cur.close()
-            release_cloud_conn(conn)
             status['checks']['cloud_db'] = 'ok'
         else:
             status['checks']['cloud_db'] = 'unavailable'
@@ -1699,18 +1808,26 @@ def health():
         status['checks']['cloud_db'] = f'error: {str(e)}'
         status['status'] = 'degraded'
         http_status = 503
+    finally:
+        if conn:
+            release_cloud_conn(conn)
+
+    conn = None
     try:
         conn = get_local_conn()
         if conn:
             cur = conn.cursor()
             cur.execute('SELECT 1')
             cur.close()
-            release_local_conn(conn)
             status['checks']['local_db'] = 'ok'
         else:
             status['checks']['local_db'] = 'unavailable'
     except Exception as e:
         status['checks']['local_db'] = f'error: {str(e)}'
+    finally:
+        if conn:
+            release_local_conn(conn)
+
     return jsonify(status), http_status
 
 @app.route('/dashboard')
@@ -3192,6 +3309,10 @@ def add_to_agent_queue():
         return jsonify({'success': False, 'error': 'Database connection failed'}), 500
 
     cur = None
+    # ── Declare response variables outside try so finally can't shadow them ──
+    response_payload = None
+    response_status  = 500
+
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
@@ -3202,8 +3323,8 @@ def add_to_agent_queue():
             LIMIT 1
         """, (user_id,))
         existing = cur.fetchone()
+
         if existing:
-            # ── FIX: count their position even for already-queued users ──
             cur.execute("""
                 SELECT COUNT(*) AS pos
                 FROM agent_queue
@@ -3215,52 +3336,70 @@ def add_to_agent_queue():
             pos_row = cur.fetchone()
             queue_position = max(int(pos_row['pos']), 1) if pos_row else 1
 
-            return jsonify({
+            response_payload = {
                 'success':        True,
                 'message':        'Already in queue',
                 'queue_id':       existing['id'],
                 'already_queued': True,
                 'queue_position': queue_position,
-            })
+            }
+            response_status = 200
 
-        # ── INSERT the new record ──────────────────────────────────────────
-        cur.execute("""
-            INSERT INTO agent_queue
-                (user_id, full_name, concern, contact_number, priority, status, timestamp)
-            VALUES
-                (%s, %s, %s, %s, %s, 'Pending',
-                 TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP))
-            RETURNING id, full_name, priority, status, timestamp
-        """, (user_id, full_name, concern, contact_number, priority))
+        else:
+            # ── INSERT the new record ──────────────────────────────────────────
+            cur.execute("""
+    INSERT INTO agent_queue
+        (user_id, full_name, concern, contact_number, priority, status, timestamp)
+    VALUES
+        (%s, %s, %s, %s, %s, 'Pending', CURRENT_TIMESTAMP)
+    RETURNING id, full_name, priority, status, timestamp
+""", (user_id, full_name, concern, contact_number, priority))
 
-        new_item = cur.fetchone()
+            new_item = cur.fetchone()
 
-        # ── FIX: count total Pending AFTER insert on the SAME connection ──
-        # This is the only way to get an accurate position — a separate
-        # connection from the pool would not see this uncommitted row yet.
-        cur.execute("""
-            SELECT COUNT(*) AS pos
-            FROM agent_queue
-            WHERE status = 'Pending'
-        """)
-        pos_row        = cur.fetchone()
-        queue_position = max(int(pos_row['pos']), 1) if pos_row else 1
+            # Count total Pending AFTER insert on the SAME connection
+            # so the uncommitted row is visible in this transaction.
+            cur.execute("""
+                SELECT COUNT(*) AS pos
+                FROM agent_queue
+                WHERE status = 'Pending'
+            """)
+            pos_row        = cur.fetchone()
+            queue_position = max(int(pos_row['pos']), 1) if pos_row else 1
 
-        conn.commit()
+            conn.commit()
 
-        logger.info(
-            f"Agent queue: {full_name} (user_id={user_id}) added "
-            f"with priority={priority}, position=#{queue_position}"
-        )
+            logger.info(
+                f"Agent queue: {full_name} (user_id={user_id}) added "
+                f"with priority={priority}, position=#{queue_position}"
+            )
+
+            response_payload = {
+                'success':        True,
+                'message':        'Added to queue',
+                'queue_id':       new_item['id'],
+                'already_queued': False,
+                'queue_position': queue_position,
+            }
+            response_status = 201
+
     except Exception as e:
-        if conn:
+        try:
             conn.rollback()
+        except Exception:
+            pass
         logger.exception("add_to_agent_queue error")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        response_payload = {'success': False, 'error': str(e)}
+        response_status  = 500
+
     finally:
         if cur:
             cur.close()
         release_local_conn(conn)
+
+    # ── Always reached — Flask gets a valid response object ──────────────────
+    return jsonify(response_payload), response_status
+
 @app.route('/api/incidents', methods=['GET'])
 @login_required
 def get_incidents_api():
@@ -3344,7 +3483,7 @@ def get_incidents_api():
 
         result = []
         for row in incidents:
-            result.append({
+                        result.append({
                 'reference_id':              row.get('reference_id') or '',
                 'consumer_names':            row.get('consumer_names') or '',
                 'account_numbers':           row.get('account_numbers') or '',
@@ -3353,6 +3492,7 @@ def get_incidents_api():
                 'feeder_status':             row['feeder_status'],
                 'feeder_is_active':          row['feeder_is_active'],
                 'type':                      row['type'],
+                'type_breakdown':            row.get('type_breakdown') or {},   # ← ADDED
                 'location_display':          row['location_display'],
                 'barangay':                  row['barangay'],
                 'town':                      row['town'],
@@ -3631,18 +3771,31 @@ def update_incident_status(incident_id):
             WHERE incident_id = %s
             RETURNING incident_id, job_order_id, barangay, town,
                       assigned_at, restored_at, assigned_by, restored_by
-        """, (new_status,
-              new_status,
-              new_status,
-              new_status,
-              new_status, actor,
-              new_status, actor,
-              incident_id))
+        """, (new_status, new_status, new_status, new_status,
+              new_status, actor, new_status, actor, incident_id))
         res = cur.fetchone()
         if not res:
             return jsonify({'success': False, 'error': 'Incident not found'}), 404
+
+        # ── Cascade to the individual consumer reports ──────────────
+        #  ASSIGNED → only reports still NEW
+        #  RESTORED → every report that is not already restored/resolved
+        if new_status in ('ASSIGNED', 'RESTORED'):
+            cur.execute("""
+                UPDATE outage_reports
+                SET status            = %s,
+                    status_changed_at = TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP),
+                    assigned_at = CASE WHEN %s='ASSIGNED' AND assigned_at IS NULL
+                                  THEN TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP) ELSE assigned_at END,
+                    restored_at = CASE WHEN %s='RESTORED' AND restored_at IS NULL
+                                  THEN TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP) ELSE restored_at END
+                WHERE incident_id = %s
+                  AND status NOT IN ('RESTORED', 'RESOLVED')
+                  AND (%s = 'RESTORED' OR status = 'NEW')
+            """, (new_status, new_status, new_status, incident_id, new_status))
+
         conn.commit()
-        logger.info(f"Incident {incident_id} → {new_status} by {actor}")
+        logger.info(f"Incident {incident_id} → {new_status} by {actor} (reports cascaded)")
         try:
             socketio.emit('incident_updated', {
                 'incident_id': incident_id,
@@ -3651,7 +3804,7 @@ def update_incident_status(incident_id):
                 'location':    f"{res['town']} / {res['barangay']}",
                 'timestamp':   isoformat_safe(datetime.now(timezone.utc))
             })
-        except Exception as e:
+        except Exception:
             logger.exception("WebSocket broadcast error")
         return jsonify({
             'success': True,
@@ -3660,7 +3813,7 @@ def update_incident_status(incident_id):
             'assigned_by': res.get('assigned_by'),
             'restored_by': res.get('restored_by'),
         })
-    except Exception as e:
+    except Exception:
         conn.rollback()
         logger.exception("Update status error")
         return jsonify({'success': False, 'error': 'Failed to update incident status'}), 500
@@ -3810,7 +3963,7 @@ def initialize_performance_indexes():
         # connections to be in a known transactional state.
         conn = psycopg2.connect(
             host=host,
-            port=int(os.getenv("CLOUD_DB_PORT", "5432")),
+            port=int(os.getenv("CLOUD_DB_SESSION_PORT", "5432")),
             database=os.getenv("CLOUD_DB_NAME"),
             user=os.getenv("CLOUD_DB_USER"),
             password=os.getenv("CLOUD_DB_PASSWORD"),
@@ -3971,7 +4124,7 @@ def get_map_reports():
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute("""
-            SELECT r.report_id as id, r.full_name, r.contact_number, r.address,
+            SELECT r.report_id as id, r.incident_id, r.full_name, r.contact_number, r.address,
                    r.details, r.priority, r.created_at, r.incident_type,
                    r.status,
                    ST_X(r.geom::geometry) as lng,
@@ -3986,8 +4139,9 @@ def get_map_reports():
         reports = cur.fetchall()
         result = []
         for row in reports:
-            result.append({
+                result.append({
                 'id': row['id'],
+                'incident_id': row['incident_id'],
                 'customer': row['full_name'],
                 'contact': row['contact_number'],
                 'address': row['address'],
@@ -5212,15 +5366,14 @@ def upload_outage_photo():
         return jsonify({'success': False, 'error': 'Empty file'}), 400
 
     mime = file.mimetype
-    if mime not in ALLOWED_PHOTO_MIME:  # ← now resolves from top-level constant
-        return jsonify({'success': False, 'error': 'Only JPEG, PNG, or WEBP images are allowed'}), 400
+    if mime not in ALLOWED_PHOTO_MIME:
+        return jsonify({'success': False,
+                        'error': 'Only JPEG, PNG, WEBP images or MP4, MOV, WEBM videos are allowed'}), 400
 
     file_bytes = file.read()
-    if len(file_bytes) > MAX_PHOTO_BYTES:  # ← now resolves from top-level constant
-        return jsonify({
-            'success': False,
-            'error': 'Image too large (max 2MB). Please try again — your photo should be auto-compressed.'
-        }), 400
+    if len(file_bytes) > MAX_PHOTO_BYTES:
+        return jsonify({'success': False,
+                        'error': 'File too large (max 20MB). Please choose a smaller file.'}), 400
 
     ext = ALLOWED_PHOTO_MIME[mime]
     filename = f"{datetime.now():%Y/%m/%d}/{uuid.uuid4().hex}.{ext}"
@@ -6144,7 +6297,7 @@ def debug_joblist_conn():
             database=os.getenv('JOBLIST_DB_NAME', 'joblist'),
             user=os.getenv('LOCAL_DB_USER', 'postgres'),
             password=os.getenv('LOCAL_DB_PASSWORD', ''),
-            connect_timeout=5
+            connect_timeout=4
         )
         cur = conn.cursor()
         cur.execute("""
@@ -6383,7 +6536,6 @@ def get_meter_concern_statistics():
         if cur:
             cur.close()
         release_db_connection(conn)
-
 @app.route('/api/agent_queue', methods=['GET'])
 @login_required
 @limiter.exempt
@@ -6402,7 +6554,7 @@ def get_agent_queue():
 
         query = """
             SELECT id, user_id, full_name, concern, contact_number,
-                   priority, timestamp, status, served_at, served_by
+                   priority, timestamp, status, served_at, served_by, rating
             FROM agent_queue WHERE 1=1
         """
         params = []
@@ -6549,56 +6701,33 @@ def _auto_resume_watcher(sender_id: str, queue_id: int) -> None:
 
 def _discard_stale_paused_messages(sender_id: str) -> None:
     """
-    While a conversation is manually paused, Rasa still logs any
-    messages the consumer sends (UserUttered events) — it just never
-    predicts/executes an action for them. If left in the tracker,
-    those stale, un-actioned messages are still the "latest user
-    turn" once we unpause, so the very next prediction cycle can act
-    on OLD input instead of waiting for a genuinely new message.
+    Previously attempted to rewind stale UserUttered events logged while
+    the conversation was paused. Replaced with a deliberate no-op.
 
-    This walks the tracker back to the most recent 'pause' event and
-    reverts (rewinds) every 'user' turn that happened after it, so
-    only messages sent AFTER resume are ever recognized/actioned.
+    WHY THIS IS NOW A NO-OP:
+    Each Rasa 'rewind' event walks the tracker backward past the nearest
+    UserUttered AND every SlotSet between it and the prior user turn.
+    With 14+ stale messages observed in production, cascading rewinds
+    wiped critical slots set just moments earlier — specifically
+    agent_queue_id and terms_agreed — which caused action_handle_
+    resolution_confirmed and action_handle_resolution_declined to receive
+    None for agent_queue_id and False for terms_agreed, silently breaking
+    the entire Yes/No confirmation flow.
+
+    The correct repair is performed by _send_resolution_confirmation()
+    immediately after this function returns: it re-asserts ALL required
+    slots (terms_agreed, agent_queue_id, escalate_to_agent, etc.) in a
+    single atomic batch POST to the tracker. Those slot values are then
+    verified via a GET /tracker call before the FB quick-reply is sent.
+
+    Stale messages left in the tracker are harmless: they surface as
+    unrecognized intents and are silently dropped by action_drop_zwsp
+    or action_default_fallback on the next real user turn.
     """
-    rasa_url = os.getenv("RASA_URL", "http://localhost:5005")
-    try:
-        resp = requests.get(
-            f"{rasa_url}/conversations/{sender_id}/tracker",
-            timeout=8,
-        )
-        resp.raise_for_status()
-        events = resp.json().get("events", [])
-    except Exception as e:
-        logger.warning(f"[DiscardStale] Could not fetch tracker for {sender_id}: {e}")
-        return
-
-    last_pause_idx = None
-    for i, ev in enumerate(events):
-        if ev.get("event") == "pause":
-            last_pause_idx = i
-    if last_pause_idx is None:
-        return
-
-    stale_turns = sum(
-        1 for ev in events[last_pause_idx + 1:] if ev.get("event") == "user"
+    logger.info(
+        f"[DiscardStale] No-op for {sender_id} — "
+        f"slots will be re-asserted by _send_resolution_confirmation()."
     )
-    if stale_turns == 0:
-        return
-
-    try:
-        for _ in range(stale_turns):
-            requests.post(
-                f"{rasa_url}/conversations/{sender_id}/tracker/events",
-                json={"event": "rewind"},
-                headers={"Content-Type": "application/json"},
-                timeout=8,
-            )
-        logger.info(
-            f"[DiscardStale] Reverted {stale_turns} message(s) {sender_id} "
-            f"sent while paused — resume will wait for a fresh message."
-        )
-    except Exception as e:
-        logger.error(f"[DiscardStale] Failed to revert stale messages for {sender_id}: {e}")
         
 def _trigger_rasa_auto_resume(sender_id: str) -> None:
     """
@@ -7102,22 +7231,41 @@ def resume_all_stuck():
         'results':   results,
     })
 
+# ============================================================
+# FACEBOOK PAGE ACCESS TOKEN — single source of truth.
+# Every FB-sending function in this file must read this SAME
+# name. Two names (FB_PAGE_ACCESS_TOKEN vs FACEBOOK_PAGE_ACCESS_TOKEN)
+# pointing at the same secret is what silently broke resolution
+# confirmation messages — pick ONE and use it everywhere.
+# ============================================================
+FB_TOKEN_ENV_VAR = "FACEBOOK_PAGE_ACCESS_TOKEN"
 
+def _get_fb_token() -> str:
+    token = os.getenv(FB_TOKEN_ENV_VAR, "")
+    if not token:
+        logger.error(
+            f"❌ {FB_TOKEN_ENV_VAR} is not set — no Facebook Messenger "
+            f"send will work (resolution confirmations, closure messages, "
+            f"idle nudges, etc. will all silently no-op)."
+        )
+    return token
 
 @app.route("/api/agent_queue/<int:queue_id>/serve", methods=["POST"])
 @login_required
 def serve_queue_item(queue_id):
-    """
-    Mark a Pending queue item as Resolved, trigger Rasa resume in a
-    background thread, and return immediately to the dashboard.
-
-    POST body (JSON):
-        { "served_by": "Agent Full Name" }
-    """
     data      = request.get_json() or {}
     served_by = (data.get("served_by") or "Agent").strip()
 
-    # ── 1. DB: mark Resolved ────────────────────────────────────────────
+    fb_token = _get_fb_token()
+    if not fb_token:
+        return jsonify({
+            "success": False,
+            "error": (
+                f"{FB_TOKEN_ENV_VAR} is not configured on the server. "
+                "The customer cannot be messaged. Contact your administrator."
+            ),
+        }), 500
+
     conn = get_local_conn()
     if not conn:
         return jsonify({"success": False, "error": "Database connection failed"}), 500
@@ -7128,6 +7276,19 @@ def serve_queue_item(queue_id):
     try:
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
+        cur.execute("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='agent_queue' AND column_name='resolution_note'
+                ) THEN ALTER TABLE agent_queue ADD COLUMN resolution_note TEXT; END IF;
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='agent_queue' AND column_name='confirmed_at'
+                ) THEN ALTER TABLE agent_queue ADD COLUMN confirmed_at TIMESTAMP; END IF;
+            END $$;
+        """)
+
         cur.execute(
             "SELECT id, user_id, full_name, status FROM agent_queue WHERE id = %s",
             (queue_id,),
@@ -7137,33 +7298,38 @@ def serve_queue_item(queue_id):
         if not row:
             return jsonify({"success": False, "error": "Queue item not found"}), 404
 
-        user_id        = row["user_id"]
+        user_id        = (row["user_id"] or "").strip()
         current_status = row["status"]
         customer_name  = row["full_name"] or "Customer"
 
-        # Race-condition guard
+        if not user_id:
+            return jsonify({
+                "success": False,
+                "error": "This queue entry has no Facebook user ID — cannot message the customer.",
+            }), 400
+
         if current_status != "Pending":
             return jsonify({
-                "success":        False,
+                "success":       False,
                 "already_served": True,
-                "error":          "Already resolved",
+                "error":         "This ticket is not in Pending status (already actioned).",
             }), 409
 
         cur.execute(
-            """
-            UPDATE agent_queue
-               SET status    = 'Resolved',
-                   served_at = TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP),
-                   served_by = %s
-             WHERE id = %s
-            """,
-            (served_by, queue_id),
-        )
+    """
+    UPDATE agent_queue
+       SET status    = 'Awaiting Confirmation',
+           served_at = CURRENT_TIMESTAMP,
+           served_by = %s
+     WHERE id = %s
+    """,
+    (served_by, queue_id),
+)
         conn.commit()
 
         logger.info(
-            f"[AgentQueue] #{queue_id} ({customer_name}) resolved "
-            f"by {served_by!r} — PSID={user_id}"
+            f"[AgentQueue] #{queue_id} ({customer_name}) marked Awaiting "
+            f"Confirmation by {served_by!r} — PSID={user_id}"
         )
 
     except Exception as e:
@@ -7179,34 +7345,546 @@ def serve_queue_item(queue_id):
             cur.close()
         release_local_conn(conn)
 
-    # ── 2. WebSocket broadcast ──────────────────────────────────────────
     try:
         socketio.emit("queue_updated", {
-            "action":    "resolved",
+            "action":    "awaiting_confirmation",
             "queue_id":  queue_id,
             "served_by": served_by,
             "timestamp": isoformat_safe(datetime.now(timezone.utc)),
         })
     except Exception as ws_err:
-        logger.warning(
-            f"[AgentQueue] WebSocket broadcast failed (non-fatal): {ws_err}"
-        )
+        logger.warning(f"[AgentQueue] WebSocket broadcast failed (non-fatal): {ws_err}")
 
-    # ── 3. Trigger Rasa resume in a background thread ───────────────────
-    # _send_fb_ping() is intentionally NOT called here — it was the
-    # root cause of the bot-pause bug (zero-width space collision).
-    def _resume_async():
-        _trigger_rasa_resume(user_id, served_by)
+    # ── FIX: RASA_URL is read HERE, at call time, and logged loudly.
+    # If this env var is wrong/missing, you will now see it immediately
+    # in the log instead of a silent timeout inside the thread.
+    rasa_url_check = os.getenv("RASA_URL", "http://localhost:5005")
+    logger.info(
+        f"[AgentQueue] #{queue_id} — about to notify via RASA_URL={rasa_url_check}, "
+        f"user_id={user_id}"
+    )
 
-    t = threading.Thread(target=_resume_async, daemon=True)
-    t.start()
+    def _notify_async():
+        logger.info(f"[AgentQueue] >>> THREAD START notify for #{queue_id}, user_id={user_id}")
+        try:
+            result = _send_resolution_confirmation(user_id, served_by, queue_id, fb_token)
+            if not result["ok"]:
+                logger.error(
+                    f"[AgentQueue] !!! NOTIFY FAILED for #{queue_id}: {result['error']}"
+                )
+                try:
+                    socketio.emit("queue_updated", {
+                        "action":    "resolve_notify_failed",
+                        "queue_id":  queue_id,
+                        "error":     result["error"],
+                        "timestamp": isoformat_safe(datetime.now(timezone.utc)),
+                    })
+                except Exception:
+                    pass
+            else:
+                logger.info(f"[AgentQueue] <<< NOTIFY OK for #{queue_id}")
+        except Exception:
+            logger.exception(f"[AgentQueue] !!! THREAD CRASHED for #{queue_id}")
+
+    import threading as _thr
+    _thr.Thread(target=_notify_async, daemon=True).start()
 
     return jsonify({
         "success":   True,
-        "rasa_ok":   True,
+        "notified":  True,
         "user_id":   user_id,
         "served_by": served_by,
     })
+
+
+def _send_resolution_confirmation(
+    sender_id: str,
+    served_by: str,
+    queue_id: int,
+    fb_token: str,
+) -> dict:
+    import time as _t
+    import requests as _r
+    import json as _json
+
+    rasa_url = os.getenv("RASA_URL", "http://localhost:5005")
+    errors   = []
+
+    # ── Step 0: Fail fast — verify Rasa is reachable ─────────────────────
+    try:
+        ping = _r.get(f"{rasa_url}/version", timeout=5)
+        logger.info(
+            f"[ResConf] Rasa reachable at {rasa_url} (HTTP {ping.status_code})"
+        )
+    except Exception as ping_err:
+        final_error = (
+            f"Rasa action server UNREACHABLE at {rasa_url}: {ping_err}"
+        )
+        logger.error(f"[ResConf] ABORTING for {sender_id} — {final_error}")
+        return {"ok": False, "error": final_error}
+
+    # ── Step 1: Unpause the tracker ───────────────────────────────────────
+    # Retry twice with a 1-second gap — the tracker endpoint is occasionally
+    # slow to respond on the first call right after a long pause.
+    unpause_ok = False
+    for attempt in (1, 2):
+        try:
+            r = _r.post(
+                f"{rasa_url}/conversations/{sender_id}/tracker/events",
+                json={"event": "resume"},
+                headers={"Content-Type": "application/json"},
+                timeout=10,
+            )
+            unpause_ok = (r.status_code == 200)
+            if not unpause_ok:
+                errors.append(
+                    f"unpause attempt {attempt} HTTP {r.status_code}: "
+                    f"{r.text[:200]}"
+                )
+        except Exception as e:
+            errors.append(f"unpause attempt {attempt} failed: {e}")
+
+        if unpause_ok:
+            logger.info(
+                f"[ResConf] Tracker unpaused for {sender_id} (attempt {attempt})"
+            )
+            break
+        if attempt == 1:
+            _t.sleep(1.0)
+
+    if not unpause_ok:
+        final_error = (
+            f"unpause failed after 2 attempts: {'; '.join(errors)}"
+        )
+        logger.error(f"[ResConf] ABORTING for {sender_id} — {final_error}")
+        return {"ok": False, "error": final_error}
+
+    _t.sleep(0.5)
+
+    # ── Step 2: Set ALL required slots as a single atomic batch ──────────
+    #
+    # CRITICAL ORDER: slots MUST be set BEFORE _discard_stale_paused_messages
+    # is called (or in this revised version, before any rewind-style cleanup),
+    # because rewinds roll the tracker back past SlotSet events.
+    #
+    # We set MORE slots than strictly needed for the confirmation flow:
+    #
+    #   terms_agreed=True        — repair if rewinds wiped it (consumer
+    #                              already accepted terms to reach this point)
+    #   outage_awaiting_town=False — prevent action_ask_schedule_outage_town
+    #                              from firing instead of the confirmation handler
+    #   awaiting_star_rating=False — ensure we start the confirmation flow
+    #                              clean, not mid-rating from a prior session
+    #   escalate_to_agent=False  — clear any stale escalation flag so
+    #                              talk_to_agent_form isn't blocked if the
+    #                              consumer later taps "No, still need help"
+    #   agent_queue_id           — the DB primary key the confirmation actions
+    #                              use to call /confirm_resolved and /requeue
+    #   served_by_agent          — displayed to the consumer in the follow-up
+    #
+    slot_events = [
+        {"event": "slot", "name": "terms_agreed",         "value": True},
+        {"event": "slot", "name": "outage_awaiting_town", "value": False},
+        {"event": "slot", "name": "awaiting_star_rating", "value": False},
+        {"event": "slot", "name": "escalate_to_agent",    "value": False},
+        {"event": "slot", "name": "agent_queue_id",       "value": str(queue_id)},
+        {"event": "slot", "name": "served_by_agent",      "value": served_by},
+        # Clear any leftover form slots so talk_to_agent_form starts fresh
+        # if the consumer declines resolution and needs to re-queue.
+        {"event": "slot", "name": "tta_full_name",        "value": None},
+        {"event": "slot", "name": "tta_contact_number",   "value": None},
+        {"event": "slot", "name": "tta_concern",          "value": None},
+    ]
+
+    slots_ok = False
+    for slot_attempt in (1, 2):
+        try:
+            r = _r.post(
+                f"{rasa_url}/conversations/{sender_id}/tracker/events",
+                json=slot_events,
+                headers={"Content-Type": "application/json"},
+                timeout=10,
+            )
+            slots_ok = (r.status_code == 200)
+            if slots_ok:
+                logger.info(
+                    f"[ResConf] Slots set for {sender_id} "
+                    f"(agent_queue_id={queue_id}, served_by={served_by!r}, "
+                    f"attempt={slot_attempt})"
+                )
+                break
+            else:
+                errors.append(
+                    f"slot batch attempt {slot_attempt} HTTP "
+                    f"{r.status_code}: {r.text[:200]}"
+                )
+        except Exception as e:
+            errors.append(f"slot batch attempt {slot_attempt} failed: {e}")
+
+        if slot_attempt == 1:
+            _t.sleep(0.5)
+
+    if not slots_ok:
+        final_error = (
+            f"slot-set failed after 2 attempts, aborting to avoid "
+            f"untracked ticket: {'; '.join(errors)}"
+        )
+        logger.error(f"[ResConf] ABORTING for {sender_id} — {final_error}")
+        return {"ok": False, "error": final_error}
+
+    # ── Step 3: Verify the slots actually landed ──────────────────────────
+    # This is the guard that catches the "slots appear to set but the
+    # confirmation actions still see None" class of bugs. If agent_queue_id
+    # is missing after the batch POST, the FB message is pointless — the
+    # consumer would tap "Yes" and action_handle_resolution_confirmed would
+    # silently skip the DB update.
+    _t.sleep(0.3)
+    try:
+        verify_resp = _r.get(
+            f"{rasa_url}/conversations/{sender_id}/tracker",
+            timeout=8,
+        )
+        if verify_resp.status_code == 200:
+            tracker_slots = verify_resp.json().get("slots", {})
+            actual_queue_id = tracker_slots.get("agent_queue_id")
+            actual_terms    = tracker_slots.get("terms_agreed")
+            logger.info(
+                f"[ResConf] Slot verification for {sender_id}: "
+                f"agent_queue_id={actual_queue_id!r}, "
+                f"terms_agreed={actual_terms!r}"
+            )
+            if actual_queue_id != str(queue_id):
+                logger.error(
+                    f"[ResConf] Slot verification FAILED — "
+                    f"agent_queue_id={actual_queue_id!r} (expected {queue_id!r}). "
+                    f"Aborting FB send to avoid broken confirmation flow."
+                )
+                return {
+                    "ok": False,
+                    "error": (
+                        f"Slot verification failed: agent_queue_id was "
+                        f"{actual_queue_id!r} after set, expected {queue_id!r}"
+                    ),
+                }
+        else:
+            logger.warning(
+                f"[ResConf] Could not verify slots "
+                f"(tracker HTTP {verify_resp.status_code}) — proceeding anyway."
+            )
+    except Exception as verify_err:
+        logger.warning(
+            f"[ResConf] Slot verification request failed: {verify_err} — "
+            f"proceeding anyway."
+        )
+
+    # ── Step 4: Send the FB quick-reply message ───────────────────────────
+    # This is what the consumer actually sees and taps. The quick-reply
+    # payloads map to /resolution_confirmed and /resolution_declined, which
+    # rules.yml routes to action_handle_resolution_confirmed and
+    # action_handle_resolution_declined respectively.
+    api_url = (
+        f"https://graph.facebook.com/v19.0/me/messages"
+        f"?access_token={fb_token}"
+    )
+        # ── FIX: embed agent_queue_id directly in the payload, Rasa-command
+    # style (same pattern already used for /rate_service{"rating": N}).
+    # Relying on the agent_queue_id SLOT breaks when the same consumer
+    # has more than one ticket served close together — a second Resolve
+    # click overwrites the slot before the first confirmation arrives,
+    # permanently orphaning the earlier ticket at "Awaiting Confirmation".
+    # Putting the queue_id in the payload itself makes each button
+    # self-contained and immune to slot overwrites.
+    import json as _json_payload
+    confirmed_payload = "/resolution_confirmed" + _json_payload.dumps({"agent_queue_id": queue_id})
+    declined_payload  = "/resolution_declined"  + _json_payload.dumps({"agent_queue_id": queue_id})
+
+    payload = {
+        "recipient":      {"id": sender_id},
+        "message": {
+            "text": (
+                "✅ Our agent has resolved your concern.\n"
+                "Was your issue fully resolved? 🙏"
+            ),
+            "quick_replies": [
+                {
+                    "content_type": "text",
+                    "title":        "✅ Yes, resolved!",
+                    "payload":      confirmed_payload,
+                },
+                {
+                    "content_type": "text",
+                    "title":        "❌ No, still need help",
+                    "payload":      declined_payload,
+                },
+            ],
+        },
+        "messaging_type": "RESPONSE",
+    }
+
+    try:
+        r = _r.post(
+            api_url,
+            headers={"Content-Type": "application/json"},
+            data=_json.dumps(payload),
+            timeout=15,
+        )
+        if r.status_code == 200:
+            logger.info(
+                f"[ResConf] FB quick-reply sent successfully to {sender_id}"
+            )
+            return {"ok": True, "error": None}
+        else:
+            err = (
+                f"FB send failed: HTTP {r.status_code} {r.text[:300]}"
+            )
+            logger.error(f"[ResConf] {err}")
+            return {"ok": False, "error": err}
+    except Exception as e:
+        err = f"FB send exception: {e}"
+        logger.error(f"[ResConf] {err}")
+        return {"ok": False, "error": err}
+
+@app.route('/api/agent_queue/<int:queue_id>/confirm_resolved', methods=['POST'])
+def confirm_queue_resolved(queue_id):
+    """
+    Called by action_handle_resolution_confirmed (actions.py) the moment
+    the CONSUMER taps "✅ Yes, resolved!" in Messenger. This is the only
+    place status actually becomes 'Resolved' — clicking Resolve in the
+    dashboard only moves a ticket to 'Awaiting Confirmation'.
+
+    Internal-only — authenticated via X-Internal-Secret header.
+    """
+    if not is_internal_request():
+        return jsonify({'success': False, 'error': 'Internal access only'}), 403
+
+    conn = get_local_conn()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Database connection failed'}), 500
+
+    cur = None
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            "ALTER TABLE agent_queue ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP"
+        )
+        cur.execute(
+            "SELECT id, full_name, status FROM agent_queue WHERE id = %s",
+            (queue_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({'success': False, 'error': 'Queue record not found'}), 404
+
+        if row['status'] not in ('Awaiting Confirmation', 'Pending'):
+            # already Resolved/Unresolved/Auto-Closed — don't reopen it
+            return jsonify({'success': True, 'already_final': True, 'status': row['status']})
+
+        cur.execute(
+    """
+    UPDATE agent_queue
+       SET status       = 'Resolved',
+           confirmed_at = CURRENT_TIMESTAMP
+     WHERE id = %s
+    RETURNING id, full_name, status
+    """,
+    (queue_id,)
+)
+        result = cur.fetchone()
+        conn.commit()
+
+        logger.info(
+            f"[Confirm] Queue #{queue_id} ({result['full_name']}) "
+            f"confirmed Resolved by the consumer"
+        )
+
+        try:
+            socketio.emit('queue_updated', {
+                'action':    'confirmed_resolved',
+                'queue_id':  queue_id,
+                'timestamp': isoformat_safe(datetime.now(timezone.utc)),
+            })
+        except Exception:
+            pass
+
+        return jsonify({'success': True, 'queue_id': queue_id, 'status': 'Resolved'})
+
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        logger.exception(f"confirm_queue_resolved error for queue_id={queue_id}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    finally:
+        if cur:
+            cur.close()
+        release_local_conn(conn)
+
+@app.route('/api/agent_queue/<int:queue_id>/requeue', methods=['POST'])
+def requeue_declined_consumer(queue_id):
+    """
+    Called by action_handle_resolution_declined when the consumer says
+    their concern was NOT resolved. The OLD ticket is closed out as
+    'Unresolved' (a terminal state, kept for reporting) — it is NOT
+    recycled back to Pending. A fresh Pending ticket is created
+    separately once the consumer resubmits talk_to_agent_form.
+
+    Internal-only — authenticated via X-Internal-Secret header.
+    """
+    if not is_internal_request():
+        return jsonify({'success': False, 'error': 'Internal access only'}), 403
+
+    conn = get_local_conn()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Database connection failed'}), 500
+
+    cur = None
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            "ALTER TABLE agent_queue ADD COLUMN IF NOT EXISTS resolution_note TEXT"
+        )
+
+        cur.execute(
+            "SELECT id, user_id, full_name, status FROM agent_queue WHERE id = %s",
+            (queue_id,)
+        )
+        row = cur.fetchone()
+
+        if not row:
+            return jsonify({'success': False, 'error': 'Queue record not found'}), 404
+
+        cur.execute(
+            """
+            UPDATE agent_queue
+               SET status          = 'Unresolved',
+                   resolution_note = 'Consumer indicated concern was not resolved'
+             WHERE id = %s
+            """,
+            (queue_id,)
+        )
+        conn.commit()
+
+        logger.info(
+            f"[Requeue] Queue #{queue_id} ({row['full_name']}) marked "
+            f"Unresolved — consumer declined resolution; a new ticket "
+            f"will be created once they resubmit the agent form"
+        )
+
+        try:
+            socketio.emit('queue_updated', {
+                'action':    'marked_unresolved',
+                'queue_id':  queue_id,
+                'timestamp': isoformat_safe(datetime.now(timezone.utc)),
+            })
+        except Exception:
+            pass
+
+        return jsonify({
+            'success':    True,
+            'queue_id':   queue_id,
+            'full_name':  row['full_name'],
+            'new_status': 'Unresolved',
+        })
+
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        logger.exception(f"requeue_declined_consumer error for queue_id={queue_id}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    finally:
+        if cur:
+            cur.close()
+        release_local_conn(conn)
+
+
+@app.route('/api/agent_queue/<int:queue_id>/rate', methods=['POST'])
+def rate_queue_resolution(queue_id):
+    """
+    Save a star rating (1–5) from the consumer after they confirmed
+    their concern was resolved.
+
+    Called by action_handle_star_rating in actions.py.
+    Internal-only — authenticated via X-Internal-Secret header.
+    """
+    if not is_internal_request():
+        return jsonify({'success': False, 'error': 'Internal access only'}), 403
+
+    data   = request.get_json() or {}
+    rating = data.get('rating')
+
+    try:
+        rating = int(rating)
+        if not (1 <= rating <= 5):
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Rating must be 1–5'}), 400
+
+    conn = get_local_conn()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Database connection failed'}), 500
+
+    cur = None
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Add rating column if it doesn't exist yet (idempotent)
+        cur.execute("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'agent_queue'
+                      AND column_name = 'rating'
+                ) THEN
+                    ALTER TABLE agent_queue ADD COLUMN rating SMALLINT;
+                END IF;
+            END $$;
+        """)
+
+        cur.execute(
+            "UPDATE agent_queue SET rating = %s WHERE id = %s RETURNING id, full_name, rating",
+            (rating, queue_id)
+        )
+        row = cur.fetchone()
+        if not row:
+            return jsonify({'success': False, 'error': 'Queue record not found'}), 404
+
+        conn.commit()
+
+        logger.info(
+            f"[Rating] Queue #{queue_id} ({row['full_name']}) "
+            f"rated {rating}/5 stars"
+        )
+
+        # Broadcast so dashboard can show the new rating live
+        try:
+            socketio.emit('queue_updated', {
+                'action':   'rated',
+                'queue_id': queue_id,
+                'rating':   rating,
+                'timestamp': isoformat_safe(datetime.now(timezone.utc)),
+            })
+        except Exception:
+            pass
+
+        return jsonify({'success': True, 'queue_id': queue_id, 'rating': rating})
+
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        logger.exception(f"rate_queue_resolution error for queue_id={queue_id}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    finally:
+        if cur:
+            cur.close()
+        release_local_conn(conn)
 
 @app.route('/api/internal/pause_conversation/<sender_id>', methods=['POST'])
 def pause_conversation_admin(sender_id):
@@ -7367,6 +8045,346 @@ def get_queue_statistics():
         if cur: cur.close()
         release_local_conn(conn)
 
+# ============================================
+# SPAM CONTROL — status, conversation viewer, block/unblock
+# ============================================
+def initialize_spam_control_tables():
+    conn = get_local_conn()
+    if not conn:
+        return
+    cur = None
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS spam_sender_status (
+                sender_id     TEXT PRIMARY KEY,
+                status        TEXT NOT NULL DEFAULT 'BLOCKED',   -- BLOCKED | UNBLOCKED
+                blocked_until TIMESTAMP,                          -- NULL = indefinite
+                reason        TEXT,
+                blocked_by    TEXT,
+                blocked_at    TIMESTAMP DEFAULT TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP),
+                unblocked_by  TEXT,
+                unblocked_at  TIMESTAMP
+            )
+        """)
+        # NEW: SOFT = one restricted notice then silence; FULL = never reply
+        cur.execute("""
+            ALTER TABLE spam_sender_status
+            ADD COLUMN IF NOT EXISTS block_mode TEXT NOT NULL DEFAULT 'SOFT'
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS spam_agent_actions (
+                id           SERIAL PRIMARY KEY,
+                sender_id    TEXT NOT NULL,
+                action       TEXT NOT NULL,
+                note         TEXT,
+                performed_by TEXT,
+                created_at   TIMESTAMP DEFAULT TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP)
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_spam_agent_actions_sender ON spam_agent_actions(sender_id, created_at DESC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_spam_logs_sender_created ON spam_logs(sender_id, created_at DESC)")
+        conn.commit()
+        logger.info("✅ spam control tables ready")
+    except Exception:
+        try: conn.rollback()
+        except Exception: pass
+        logger.exception("Failed to initialize spam control tables")
+    finally:
+        if cur: cur.close()
+        release_local_conn(conn)
+        # Rollback: ALTER TABLE spam_sender_status DROP COLUMN block_mode;
+        #           (full: DROP TABLE spam_agent_actions; DROP TABLE spam_sender_status;)
+
+
+_ACTIVE_BLOCK_SQL = """
+    status = 'BLOCKED'
+    AND (blocked_until IS NULL
+         OR blocked_until > TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP))
+"""
+
+def _risk_level(total_flags, flags_1h, blocked_until, is_blocked):
+    """Thresholds are illustrative — tune to your real traffic."""
+    if is_blocked:
+        return 'BLOCKED' if blocked_until is None else 'TEMPORARILY_BLOCKED'
+    if flags_1h >= 5 or total_flags >= 10:
+        return 'POTENTIAL_SPAM'
+    if flags_1h >= 2 or total_flags >= 3:
+        return 'SUSPICIOUS'
+    return 'NORMAL'
+
+
+def _fetch_rasa_messages(sender_id, limit=300):
+    """Reads the conversation from Rasa's tracker. Returns (messages, available)."""
+    rasa_url = os.getenv('RASA_URL', 'http://localhost:5005')
+    try:
+        resp = requests.get(
+            f"{rasa_url}/conversations/{sender_id}/tracker",
+            params={'include_events': 'ALL'}, timeout=8
+        )
+        if resp.status_code == 404:
+            return [], True
+        resp.raise_for_status()
+        events = resp.json().get('events', [])
+    except Exception as e:
+        logger.warning(f"Rasa tracker fetch failed for {sender_id}: {e}")
+        return [], False
+
+    msgs = []
+    for ev in events:
+        kind = ev.get('event')
+        if kind not in ('user', 'bot'):
+            continue
+        text = ev.get('text')
+        if not text and kind == 'bot':
+            data = ev.get('data') or {}
+            if data.get('attachment') or data.get('elements'):
+                text = '[carousel / attachment]'
+            elif data.get('buttons'):
+                text = '[buttons]'
+        if not text:
+            continue
+        ts = ev.get('timestamp')
+        msgs.append({
+            'role': 'customer' if kind == 'user' else 'bot',
+            'text': text[:1000],
+            'timestamp': datetime.fromtimestamp(ts, PHILIPPINE_TZ).isoformat() if ts else None,
+        })
+    return msgs[-limit:], True
+
+
+def _get_messenger_thread_link(sender_id):
+    """
+    Asks Meta (Conversations API) for the Page-inbox link of this PSID's thread.
+    Returns (url|None, note). Never fabricates a URL.
+    """
+    fb_token = _get_fb_token()
+    if not fb_token:
+        return None, 'Page token not configured'
+    try:
+        resp = requests.get(
+            "https://graph.facebook.com/v19.0/me/conversations",
+            params={'platform': 'messenger', 'user_id': sender_id,
+                    'fields': 'id,link,updated_time', 'access_token': fb_token},
+            timeout=8
+        )
+        data = resp.json()
+        if 'error' in data:
+            err = data['error'] or {}
+            logger.warning(f"Conversations API failed for {sender_id}: code={err.get('code')} msg={err.get('message')}")
+            return None, 'Meta did not return a thread link (missing permission or no thread)'
+        items = data.get('data') or []
+        link = (items[0].get('link') if items else None) or ''
+        if link.startswith('/'):
+            link = 'https://www.facebook.com' + link
+        if link.startswith('https://www.facebook.com/') or link.startswith('https://business.facebook.com/'):
+            return link, None
+        return None, 'No thread link available from Meta for this user'
+    except Exception as e:
+        logger.warning(f"Conversations API error for {sender_id}: {e}")
+        return None, 'Lookup failed'
+
+
+@app.route('/api/spam_senders/<sender_id>/conversation', methods=['GET'])
+@login_required
+def get_spam_sender_conversation(sender_id):
+    sender_id = (sender_id or '').strip()
+    if not sender_id.isdigit():
+        return jsonify({'success': False, 'error': 'Invalid sender ID'}), 400
+
+    conn = get_local_conn()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Database error'}), 500
+    cur = None
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("""
+            SELECT COUNT(*) AS total,
+                   COUNT(*) FILTER (WHERE created_at >= TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP) - INTERVAL '1 hour') AS last_hour,
+                   COUNT(*) FILTER (WHERE event_type LIKE '%%repeat%%') AS repeats,
+                   COUNT(*) FILTER (WHERE event_type LIKE '%%flood%%')  AS floods,
+                   MAX(created_at) AS last_activity
+            FROM spam_logs WHERE sender_id = %s
+        """, (sender_id,))
+        agg = cur.fetchone()
+
+        cur.execute(f"""
+            SELECT status, blocked_until, reason, blocked_by, blocked_at, block_mode
+            FROM spam_sender_status WHERE sender_id = %s AND {_ACTIVE_BLOCK_SQL}
+        """, (sender_id,))
+        block = cur.fetchone()
+
+        cur.execute("""
+            SELECT id, event_type, message_sample, created_at, reviewed, reviewed_by
+            FROM spam_logs WHERE sender_id = %s ORDER BY created_at DESC LIMIT 50
+        """, (sender_id,))
+        events = [dict(r) for r in cur.fetchall()]
+        for e in events:
+            e['created_at'] = isoformat_safe(e['created_at'])
+
+        cur.execute("""
+            SELECT action, note, performed_by, created_at
+            FROM spam_agent_actions WHERE sender_id = %s ORDER BY created_at DESC LIMIT 50
+        """, (sender_id,))
+        actions = [dict(r) for r in cur.fetchall()]
+        for a in actions:
+            a['created_at'] = isoformat_safe(a['created_at'])
+
+        level = _risk_level(agg['total'], agg['last_hour'],
+                            block['blocked_until'] if block else None, bool(block))
+        messages, rasa_ok = _fetch_rasa_messages(sender_id)
+        link, link_note = _get_messenger_thread_link(sender_id)
+
+        return jsonify({
+            'success': True,
+            'sender_id': sender_id,
+            'risk': {'level': level, 'flags_total': agg['total'], 'flags_1h': agg['last_hour'],
+                     'repeat_events': agg['repeats'], 'flood_events': agg['floods'],
+                     'last_activity': isoformat_safe(agg['last_activity'])},
+            'block': ({'blocked_until': isoformat_safe(block['blocked_until']),
+                       'reason': block['reason'],
+                       'blocked_by': block['blocked_by'],
+                       'blocked_at': isoformat_safe(block['blocked_at']),
+                       'block_mode': block['block_mode']}
+                      if block else None),
+            'messages': messages,
+            'rasa_available': rasa_ok,
+            'spam_events': events,
+            'agent_actions': actions,
+            'messenger_link': link,
+            'messenger_link_note': link_note,
+            'reports_linked': False,   # outage_reports has no PSID column
+        })
+    except Exception as e:
+        logger.exception("get_spam_sender_conversation error")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if cur: cur.close()
+        release_local_conn(conn)
+
+
+@app.route('/api/spam_senders/<sender_id>/block', methods=['POST'])
+@login_required
+def block_spam_sender(sender_id):
+    sender_id = (sender_id or '').strip()
+    if not sender_id.isdigit():
+        return jsonify({'success': False, 'error': 'Invalid sender ID'}), 400
+    data = request.get_json(silent=True) or {}
+    reason = (data.get('reason') or '').strip()[:300]
+
+    mode = (data.get('mode') or 'SOFT').strip().upper()
+    if mode not in ('SOFT', 'FULL'):
+        mode = 'SOFT'
+
+    minutes = data.get('duration_minutes')          # None => indefinite
+    if minutes is not None:
+        try:
+            minutes = int(minutes)
+            if not (1 <= minutes <= 60 * 24 * 30):
+                raise ValueError
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'Invalid duration'}), 400
+    actor = session.get('full_name') or session.get('username', 'Unknown')
+
+    conn = get_local_conn()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Database error'}), 500
+    cur = None
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO spam_sender_status (sender_id, status, blocked_until, reason, blocked_by, blocked_at,
+                                            unblocked_by, unblocked_at, block_mode)
+            VALUES (%s, 'BLOCKED',
+                    CASE WHEN %s::int IS NULL THEN NULL
+                         ELSE TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP) + (%s::int * INTERVAL '1 minute') END,
+                    %s, %s, TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP), NULL, NULL, %s)
+            ON CONFLICT (sender_id) DO UPDATE SET
+                status = 'BLOCKED', blocked_until = EXCLUDED.blocked_until, reason = EXCLUDED.reason,
+                blocked_by = EXCLUDED.blocked_by, blocked_at = EXCLUDED.blocked_at,
+                unblocked_by = NULL, unblocked_at = NULL, block_mode = EXCLUDED.block_mode
+        """, (sender_id, minutes, minutes, reason, actor, mode))
+
+        action_name = f"BLOCK_{mode}_" + ('INDEFINITE' if minutes is None else f'{minutes}MIN')
+        cur.execute("""
+            INSERT INTO spam_agent_actions (sender_id, action, note, performed_by)
+            VALUES (%s, %s, %s, %s)
+        """, (sender_id, action_name, reason, actor))
+        conn.commit()
+        logger.info(f"[SpamBlock] {sender_id} blocked by {actor} (mode={mode}, minutes={minutes})")
+        return jsonify({'success': True, 'mode': mode})
+    except Exception as e:
+        try: conn.rollback()
+        except Exception: pass
+        logger.exception("block_spam_sender error")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if cur: cur.close()
+        release_local_conn(conn)
+
+
+@app.route('/api/spam_senders/<sender_id>/unblock', methods=['POST'])
+@login_required
+def unblock_spam_sender(sender_id):
+    sender_id = (sender_id or '').strip()
+    if not sender_id.isdigit():
+        return jsonify({'success': False, 'error': 'Invalid sender ID'}), 400
+    actor = session.get('full_name') or session.get('username', 'Unknown')
+    conn = get_local_conn()
+    if not conn:
+        return jsonify({'success': False, 'error': 'Database error'}), 500
+    cur = None
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE spam_sender_status
+               SET status = 'UNBLOCKED', unblocked_by = %s,
+                   unblocked_at = TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP)
+             WHERE sender_id = %s
+        """, (actor, sender_id))
+        cur.execute("INSERT INTO spam_agent_actions (sender_id, action, performed_by) VALUES (%s, 'UNBLOCK', %s)",
+                    (sender_id, actor))
+        conn.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        try: conn.rollback()
+        except Exception: pass
+        logger.exception("unblock_spam_sender error")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if cur: cur.close()
+        release_local_conn(conn)
+
+
+@app.route('/api/internal/is_blocked/<sender_id>', methods=['GET'])
+def internal_is_sender_blocked(sender_id):
+    """Rasa/action server calls this before handling a message.
+    Returns {blocked, mode}. Fails OPEN on DB error."""
+    if not is_internal_request():
+        return jsonify({'success': False, 'error': 'Internal access only'}), 403
+    conn = get_local_conn()
+    if not conn:
+        return jsonify({'success': True, 'blocked': False, 'mode': None, 'degraded': True})
+    cur = None
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            f"SELECT block_mode FROM spam_sender_status WHERE sender_id = %s AND {_ACTIVE_BLOCK_SQL}",
+            (sender_id,)
+        )
+        row = cur.fetchone()
+        return jsonify({
+            'success': True,
+            'blocked': row is not None,
+            'mode': row['block_mode'] if row else None,
+        })
+    except Exception:
+        logger.exception("is_blocked check failed")
+        return jsonify({'success': True, 'blocked': False, 'mode': None, 'degraded': True})
+    finally:
+        if cur: cur.close()
+        release_local_conn(conn)
+
 @app.route('/spam_monitor')
 @login_required
 def spam_monitor_dashboard():
@@ -7406,21 +8424,33 @@ def get_spam_logs():
             d['reviewed_at'] = isoformat_safe(d.get('reviewed_at'))
             result.append(d)
 
-        # Aggregate: distinct senders, sorted by flag count
+                # Aggregate: distinct senders, with 1h burst count, risk, and active block
         cur.execute("""
-            SELECT sender_id, COUNT(*) AS flag_count,
-                   MAX(created_at) AS last_flagged,
-                   BOOL_OR(reviewed) AS any_reviewed
-            FROM spam_logs
-            GROUP BY sender_id
+            SELECT s.sender_id,
+                   COUNT(*) AS flag_count,
+                   COUNT(*) FILTER (WHERE s.created_at >=
+                        TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP) - INTERVAL '1 hour') AS flags_1h,
+                   MAX(s.created_at) AS last_flagged,
+                   COUNT(*) FILTER (WHERE NOT s.reviewed) AS unreviewed_count,
+                   (b.sender_id IS NOT NULL) AS is_blocked,
+                   b.blocked_until
+            FROM spam_logs s
+            LEFT JOIN spam_sender_status b
+                   ON b.sender_id = s.sender_id
+                  AND b.status = 'BLOCKED'
+                  AND (b.blocked_until IS NULL
+                       OR b.blocked_until > TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP))
+            GROUP BY s.sender_id, b.sender_id, b.blocked_until
             ORDER BY flag_count DESC, last_flagged DESC
             LIMIT 100
         """)
-        agg_rows = cur.fetchall()
         summary = []
-        for r in agg_rows:
+        for r in cur.fetchall():
             d = dict(r)
+            d['risk'] = _risk_level(d['flag_count'], d['flags_1h'], d['blocked_until'], d['is_blocked'])
+            d['any_reviewed'] = (d['unreviewed_count'] == 0)   # fixes BOOL_OR bug
             d['last_flagged'] = isoformat_safe(d.get('last_flagged'))
+            d['blocked_until'] = isoformat_safe(d.get('blocked_until'))
             summary.append(d)
 
         return jsonify({'success': True, 'logs': result, 'summary': summary})
@@ -7980,8 +9010,7 @@ def get_badge_counts():
         return jsonify({'success': True, 'counts': _badge_cache['data']})
 
     cloud_conn = get_db_connection()
-    local_conn = get_local_conn()
-    counts = {'outages': 0, 'meter': 0, 'queue': 0, 'scheduled': 0, 'spam': 0}  # ← add 'spam': 0
+    counts = {'outages': 0, 'meter': 0, 'queue': 0, 'scheduled': 0, 'spam': 0}
 
     try:
         if cloud_conn:
@@ -8001,6 +9030,7 @@ def get_badge_counts():
         if cloud_conn:
             release_db_connection(cloud_conn)
 
+    local_conn = get_local_conn()
     try:
         if local_conn:
             cur = local_conn.cursor()
@@ -8070,7 +9100,8 @@ initialize_timestamp_column()
 initialize_tracking_columns()
 initialize_spam_logs_table()
 initialize_user_activity_table()
-initialize_feature_flags_table()   # ← add this
+initialize_feature_flags_table()
+initialize_spam_control_tables()
 initialize_performance_indexes()
 
 # ============================================
@@ -8095,7 +9126,7 @@ def check_idle_users():
         """ % IDLE_THRESHOLD_MINUTES)
         idle_users = [row[0] for row in cur.fetchall()]
 
-        fb_token = os.getenv('FB_PAGE_ACCESS_TOKEN', '')
+        fb_token = os.getenv('FACEBOOK_PAGE_ACCESS_TOKEN', '')
         for sender_id in idle_users:
             if fb_token:
                 _send_idle_nudge(sender_id, fb_token)
@@ -8108,6 +9139,101 @@ def check_idle_users():
     finally:
         if cur: cur.close()
         release_local_conn(conn)
+
+AWAITING_CONFIRMATION_TIMEOUT_HOURS = 24
+
+def check_awaiting_confirmation_timeout():
+    """
+    Any ticket sitting in 'Awaiting Confirmation' for >= 24 hours with
+    no consumer reply (they never tapped Yes/No) gets auto-closed so it
+    doesn't linger forever in the dashboard as a false 'in progress'.
+    """
+    conn = get_local_conn()
+    if not conn:
+        return
+    cur = None
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            "ALTER TABLE agent_queue ADD COLUMN IF NOT EXISTS resolution_note TEXT"
+        )
+        cur.execute("""
+            SELECT id, user_id, full_name
+            FROM agent_queue
+            WHERE status = 'Awaiting Confirmation'
+              AND served_at <= TIMEZONE('Asia/Manila', CURRENT_TIMESTAMP)
+                                - INTERVAL '%s hours'
+        """ % AWAITING_CONFIRMATION_TIMEOUT_HOURS)
+        stale = cur.fetchall()
+
+        if not stale:
+            return
+
+        ids = [r['id'] for r in stale]
+        cur.execute("""
+            UPDATE agent_queue
+               SET status          = 'Auto-Closed',
+                   resolution_note = 'No customer response'
+             WHERE id = ANY(%s)
+        """, (ids,))
+        conn.commit()
+
+        logger.info(f"[AutoClose] Auto-closed {len(ids)} stale ticket(s): {ids}")
+
+        fb_token = os.getenv('FACEBOOK_PAGE_ACCESS_TOKEN', '')
+        for r in stale:
+            try:
+                socketio.emit('queue_updated', {
+                    'action':    'auto_closed',
+                    'queue_id':  r['id'],
+                    'timestamp': isoformat_safe(datetime.now(timezone.utc)),
+                })
+            except Exception:
+                pass
+            if fb_token and r.get('user_id'):
+                _send_autoclose_message(r['user_id'], fb_token)
+
+    except Exception:
+        logger.exception("check_awaiting_confirmation_timeout failed")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        if cur:
+            cur.close()
+        release_local_conn(conn)
+
+
+def _send_autoclose_message(sender_id, fb_token):
+    """Courteous closing note + resume the bot so the consumer isn't stuck."""
+    import requests as _r, json as _json
+    payload = {
+        "recipient": {"id": sender_id},
+        "message": {
+            "text": (
+                "⌛ We didn't hear back from you, so we've closed this "
+                "conversation for now.\n\n"
+                "If you still need help, just send us a message anytime "
+                "and we'll be glad to assist. 🙏"
+            )
+        },
+        "messaging_type": "MESSAGE_TAG",
+        "tag": "CONFIRMED_EVENT_UPDATE",
+    }
+    try:
+        _r.post(
+            f"https://graph.facebook.com/v19.0/me/messages?access_token={fb_token}",
+            headers={"Content-Type": "application/json"},
+            data=_json.dumps(payload),
+            timeout=8,
+        )
+    except Exception:
+        logger.exception(f"Auto-close FB message failed for {sender_id}")
+    try:
+        _force_unpause_tracker(sender_id)
+    except Exception:
+        pass
 
 def _send_idle_nudge(sender_id, fb_token):
     payload = {
@@ -8130,6 +9256,7 @@ def _send_idle_nudge(sender_id, fb_token):
 
 _idle_scheduler = BackgroundScheduler()
 _idle_scheduler.add_job(check_idle_users, "interval", minutes=1)
+_idle_scheduler.add_job(check_awaiting_confirmation_timeout, "interval", minutes=30)
 _idle_scheduler.start()
 # ============================================
 # STARTUP
