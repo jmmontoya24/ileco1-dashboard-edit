@@ -2427,8 +2427,8 @@ function showOnlyConsumerMarker(c){
         iconAnchor: [7, 7]
     });
 
-    var marker = L.marker([c.lat, c.lng], { icon, draggable: true })
-        .bindPopup(createConsumerPopup(c), { maxWidth: 300, autoPan: true, autoPanPadding: [40, 40] });
+    var marker = L.marker([c.lat, c.lng], { icon, draggable: true });
+    bindHoverPopup(marker, createConsumerPopup(c), 300);
 
     marker.on('dragend', function(ev){
         var ll = ev.target.getLatLng();
